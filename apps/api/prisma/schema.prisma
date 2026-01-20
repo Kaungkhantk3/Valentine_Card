@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Card {
+  id         Int      @id @default(autoincrement())
+  slug       String   @unique @db.VarChar(32)
+  templateId String   @db.VarChar(50)
+  photoUrl   String   @db.Text
+  message    String   @db.VarChar(120)
+  photoX     Float    @default(0)
+  photoY     Float    @default(0)
+  photoScale Float    @default(1)
+  photoRotate Float   @default(0)
+  createdAt  DateTime @default(now())
+  shape      String   @default("heart") @db.VarChar(16)
+  photos     CardPhoto[]
+
+  @@index([createdAt])
+}
+
+model CardPhoto {
+  id         Int      @id @default(autoincrement())
+
+  cardId     Int
+  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  frameIndex Int
+  url        String   @db.Text
+
+  x          Float    @default(0)
+  y          Float    @default(0)
+  scale      Float    @default(1)
+  rotate     Float    @default(0)
+  shape      String   @default("heart") @db.VarChar(16)
+
+  @@unique([cardId, frameIndex])
+  @@index([cardId])
+}
