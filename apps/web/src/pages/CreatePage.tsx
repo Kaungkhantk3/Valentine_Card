@@ -4,15 +4,25 @@ import { templates } from "../templates";
 import { SHAPES } from "../shapes";
 import type { ShapeId } from "../shapes";
 
+type FitMode = "cover" | "contain";
+
 type PhotoState = {
   file: File;
-  previewUrl: string; // object URL for live preview
-  uploadedUrl?: string; // returned from /upload
-  x: number; // stored in PREVIEW pixels (320-based)
-  y: number; // stored in PREVIEW pixels (320-based)
+  previewUrl: string;
+  uploadedUrl?: string;
+
+  // stored in PREVIEW pixels (320-based)
+  x: number;
+  y: number;
+
   scale: number;
-  rotate: number; // degrees
+  rotate: number;
   shape: ShapeId;
+
+  // ✅ NEW
+  fit: FitMode;
+  iw: number;
+  ih: number;
 };
 
 const MAX_PHOTOS = 5;
@@ -40,6 +50,40 @@ async function uploadOne(file: File): Promise<string> {
   return upJson.url as string;
 }
 
+async function getImageSize(file: File): Promise<{ w: number; h: number }> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await new Promise<void>((res, rej) => {
+      img.onload = () => res();
+      img.onerror = () => rej(new Error("Image load failed"));
+    });
+    return {
+      w: img.naturalWidth || img.width,
+      h: img.naturalHeight || img.height,
+    };
+  } finally {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
+  }
+}
+
+function chooseFit(iw: number, ih: number, fw: number, fh: number): FitMode {
+  const imgR = iw / ih;
+  const frameR = fw / fh;
+  const ratioDiff = Math.max(imgR / frameR, frameR / imgR);
+
+  // big mismatch -> start with contain so user sees whole image (instagram-like)
+  return ratioDiff > 1.35 ? "contain" : "cover";
+}
+
+function initialScaleForFit(fit: FitMode): number {
+  // keep cover stable; contain starts slightly zoomed-out
+  return fit === "contain" ? 0.85 : 1;
+}
+
 export default function CreatePage() {
   const nav = useNavigate();
 
@@ -47,7 +91,6 @@ export default function CreatePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // multi-photo state: key = frameIndex
   const [activeFrame, setActiveFrame] = useState(0);
   const [photosByFrame, setPhotosByFrame] = useState<
     Record<number, PhotoState>
@@ -55,30 +98,26 @@ export default function CreatePage() {
 
   const active = photosByFrame[activeFrame] ?? null;
 
-  // cleanup helper (avoid leaking object URLs)
-  function replacePhotoAtFrame(frameIndex: number, file: File) {
-    setPhotosByFrame((prev) => {
-      const next = { ...prev };
-
-      if (next[frameIndex]?.previewUrl) {
-        try {
-          URL.revokeObjectURL(next[frameIndex].previewUrl);
-        } catch {}
-      }
-
-      next[frameIndex] = {
-        file,
-        previewUrl: URL.createObjectURL(file),
-        x: 0,
-        y: 0,
-        scale: 1,
-        rotate: 0,
-        shape: "heart",
-      };
-
-      return next;
-    });
+  function cleanupPreviewUrl(url?: string) {
+    if (!url) return;
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
   }
+
+  const frameStyles = useMemo(() => {
+    return tpl.frames.map((fr) => ({
+      left: `${(fr.x / 1080) * 100}%`,
+      top: `${(fr.y / 1920) * 100}%`,
+      width: `${(fr.w / 1080) * 100}%`,
+      height: `${(fr.h / 1920) * 100}%`,
+    })) as Array<{
+      left: string;
+      top: string;
+      width: string;
+      height: string;
+    }>;
+  }, []);
 
   async function handleCreate() {
     setError("");
@@ -95,7 +134,6 @@ export default function CreatePage() {
     setLoading(true);
 
     try {
-      // upload all selected photos
       const uploaded = await Promise.all(
         entries.slice(0, MAX_PHOTOS).map(async (p) => ({
           frameIndex: p.frameIndex,
@@ -105,10 +143,10 @@ export default function CreatePage() {
           scale: p.scale,
           rotate: p.rotate,
           shape: p.shape,
+          fit: p.fit,
         }))
       );
 
-      // create card (multi-photo payload)
       const res = await fetch(`${API}/cards`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -149,6 +187,7 @@ export default function CreatePage() {
         },
       }));
     }
+
     function up() {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
@@ -158,19 +197,54 @@ export default function CreatePage() {
     window.addEventListener("mouseup", up);
   }
 
-  const frameStyles = useMemo(() => {
-    return tpl.frames.map((fr) => ({
-      left: `${(fr.x / 1080) * 100}%`,
-      top: `${(fr.y / 1920) * 100}%`,
-      width: `${(fr.w / 1080) * 100}%`,
-      height: `${(fr.h / 1920) * 100}%`,
-    })) as Array<{
-      left: string;
-      top: string;
-      width: string;
-      height: string;
-    }>;
-  }, []);
+  async function handleSelectFiles(files: File[]) {
+    if (files.length === 0) return;
+
+    const meta = await Promise.all(
+      files.map(async (f) => {
+        const { w, h } = await getImageSize(f);
+        return { file: f, w, h };
+      })
+    );
+
+    setPhotosByFrame((prev) => {
+      const next = { ...prev };
+
+      let idx = 0;
+      while (idx < tpl.frames.length && next[idx]) idx++;
+
+      for (const m of meta) {
+        if (idx >= tpl.frames.length) break;
+
+        const fr = tpl.frames[idx];
+        const fit = chooseFit(m.w, m.h, fr.w, fr.h);
+        const scale = initialScaleForFit(fit);
+
+        // ✅ Use template's default shape and rotation
+        const defaultShape = (tpl.defaultShape ?? "heart") as ShapeId;
+        const autoRotate = tpl.frameRotations?.[idx] ?? 0;
+
+        cleanupPreviewUrl(next[idx]?.previewUrl);
+
+        next[idx] = {
+          file: m.file,
+          previewUrl: URL.createObjectURL(m.file),
+          x: 0,
+          y: 0,
+          scale,
+          rotate: autoRotate, // ✅ Changed from 0
+          shape: defaultShape, // ✅ Changed from "heart"
+          fit,
+          iw: m.w,
+          ih: m.h,
+        };
+
+        idx++;
+      }
+
+      return next;
+    });
+  }
 
   return (
     <div>
@@ -180,56 +254,16 @@ export default function CreatePage() {
         type="file"
         accept="image/*"
         multiple
-        onChange={(e) => {
+        onChange={async (e) => {
           setError("");
-
           const files = Array.from(e.target.files ?? []).slice(0, MAX_PHOTOS);
           if (files.length === 0) return;
 
-          setPhotosByFrame((prev) => {
-            const next = { ...prev };
+          await handleSelectFiles(files);
 
-            // find first empty frame index
-            let idx = 0;
-            while (idx < tpl.frames.length && next[idx]) idx++;
-
-            // insert files into next available slots
-            for (const f of files) {
-              if (idx >= tpl.frames.length) break;
-
-              // cleanup previous preview url if replacing (rare here)
-              if (next[idx]?.previewUrl) {
-                try {
-                  URL.revokeObjectURL(next[idx].previewUrl);
-                } catch {}
-              }
-
-              next[idx] = {
-                file: f,
-                previewUrl: URL.createObjectURL(f),
-                x: 0,
-                y: 0,
-                scale: 1,
-                rotate: 0,
-                shape: "heart",
-              };
-
-              idx++;
-            }
-
-            return next;
-          });
-
-          // keep editing the most recently filled frame
-          setActiveFrame((prev) => {
-            // move to first empty or stay
-            let idx = 0;
-            while (idx < tpl.frames.length && photosByFrame[idx]) idx++;
-            return Math.min(idx, tpl.frames.length - 1);
-          });
-
-          // important: allow re-selecting same file again
-          e.currentTarget.value = "";
+          if (e.currentTarget) {
+            e.currentTarget.value = "";
+          }
         }}
       />
 
@@ -242,6 +276,7 @@ export default function CreatePage() {
 
       <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
         <div style={{ fontWeight: 700 }}>Active Frame: {activeFrame + 1}</div>
+
         <button
           type="button"
           disabled={!active}
@@ -256,7 +291,29 @@ export default function CreatePage() {
             });
           }}
         >
-          Shape: {active?.shape ?? "-"} (tap)
+          Shape: {active?.shape ?? "-"}
+        </button>
+
+        <button
+          type="button"
+          disabled={!active}
+          onClick={() => {
+            setPhotosByFrame((prev) => {
+              const p = prev[activeFrame];
+              if (!p) return prev;
+              const fit: FitMode = p.fit === "cover" ? "contain" : "cover";
+              const scale =
+                fit === "contain"
+                  ? Math.min(p.scale, 0.95)
+                  : Math.max(p.scale, 1);
+              return {
+                ...prev,
+                [activeFrame]: { ...p, fit, scale },
+              };
+            });
+          }}
+        >
+          Fit: {active?.fit ?? "-"}
         </button>
       </div>
 
@@ -354,7 +411,6 @@ export default function CreatePage() {
                 );
               }
 
-              // rect frame support later
               return null;
             })}
           </defs>
@@ -372,7 +428,9 @@ export default function CreatePage() {
                   y={fr.y}
                   width={fr.w}
                   height={fr.h}
-                  preserveAspectRatio="xMidYMid slice"
+                  preserveAspectRatio={
+                    p.fit === "contain" ? "xMidYMid meet" : "xMidYMid slice"
+                  }
                   clipPath={`url(#createClip-${i})`}
                   style={{
                     transformOrigin: `${fr.x + fr.w / 2}px ${
@@ -390,8 +448,8 @@ export default function CreatePage() {
           })}
         </svg>
 
-        {/* Frame overlays: select + drag (active photo) */}
-        {tpl.frames.map((fr, i) => {
+        {/* Frame overlays: select + drag */}
+        {tpl.frames.map((_, i) => {
           const isActive = i === activeFrame;
           const hasPhoto = !!photosByFrame[i];
 
@@ -414,9 +472,7 @@ export default function CreatePage() {
                 background: hasPhoto ? "transparent" : "rgba(255,255,255,0.05)",
               }}
               title={
-                hasPhoto
-                  ? `Frame ${i + 1} (drag to move)`
-                  : `Frame ${i + 1} (no photo)`
+                hasPhoto ? `Frame ${i + 1} (drag)` : `Frame ${i + 1} (no photo)`
               }
             />
           );

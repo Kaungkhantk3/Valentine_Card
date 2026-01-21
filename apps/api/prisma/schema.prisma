@@ -44,7 +44,8 @@ model CardPhoto {
   scale      Float    @default(1)
   rotate     Float    @default(0)
   shape      String   @default("heart") @db.VarChar(16)
-
+  fit        String   @default("cover") @db.VarChar(16)
+  
   @@unique([cardId, frameIndex])
   @@index([cardId])
 }

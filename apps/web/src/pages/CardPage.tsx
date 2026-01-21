@@ -4,9 +4,10 @@ import { templates } from "../templates";
 import { SHAPES } from "../shapes";
 
 const API = import.meta.env.VITE_API_URL as string;
-const PREVIEW_W = 320; // ✅ single source
+const PREVIEW_W = 320;
 
 type Shape = "circle" | "heart" | "triangle" | "square";
+type FitMode = "cover" | "contain";
 
 type CardPhoto = {
   id: number;
@@ -17,6 +18,9 @@ type CardPhoto = {
   scale: number;
   rotate: number;
   shape: Shape;
+
+  // ✅ NEW
+  fit?: FitMode;
 };
 
 type Card = {
@@ -31,7 +35,6 @@ type Card = {
   photoRotate: number;
   shape?: Shape;
   photos?: CardPhoto[];
-
   createdAt: string;
 };
 
@@ -56,7 +59,6 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-// For rect clipping (if you add rect templates later)
 function clipRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -104,15 +106,11 @@ export default function CardPage() {
       scale: card.photoScale ?? 1,
       rotate: card.photoRotate ?? 0,
       shape: (card.shape ?? "heart") as CardPhoto["shape"],
+      fit: "cover",
     } satisfies CardPhoto;
   }
 
-  // ✅ use first frame for now
-  const frame = tpl.frames?.[0];
   const templateSrc = tpl.backgroundSrc;
-
-  // Preview uses same coordinate basis as CreatePage.
-  // Stored photoX/photoY are 320-based preview pixels.
   const previewFactor = 1080 / PREVIEW_W;
 
   useEffect(() => {
@@ -153,11 +151,9 @@ export default function CardPage() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas not supported");
 
-      // background
       const bg = await loadImage(templateSrc);
       ctx.drawImage(bg, 0, 0, W, H);
 
-      // ---------- helpers ----------
       function getCoverCrop(
         img: HTMLImageElement,
         destW: number,
@@ -182,9 +178,30 @@ export default function CardPage() {
         }
         return { sx, sy, sw, sh };
       }
-      // -----------------------------
 
-      // ✅ export ALL frames/photos
+      function getContainDestRect(
+        img: HTMLImageElement,
+        destW: number,
+        destH: number
+      ) {
+        const imgR = img.width / img.height;
+        const destR = destW / destH;
+
+        let dw = destW,
+          dh = destH,
+          dx = 0,
+          dy = 0;
+
+        if (imgR > destR) {
+          dh = destW / imgR;
+          dy = (destH - dh) / 2;
+        } else {
+          dw = destH * imgR;
+          dx = (destW - dw) / 2;
+        }
+        return { dx, dy, dw, dh };
+      }
+
       for (let i = 0; i < tpl.frames.length; i++) {
         const fr = tpl.frames[i];
         const p = getPhotoForFrame(i);
@@ -195,12 +212,13 @@ export default function CardPage() {
 
         const img = await loadImage(p.url);
 
-        // preview(320) -> export(1080) conversion
-        const factor = W / PREVIEW_W; // 3.375
+        const factor = W / PREVIEW_W;
         const dxPx = (p.x ?? 0) * factor;
         const dyPx = (p.y ?? 0) * factor;
         const sc = p.scale ?? 1;
         const rotRad = ((p.rotate ?? 0) * Math.PI) / 180;
+
+        const fit: FitMode = (p.fit ?? "cover") as FitMode;
 
         if (fr.kind === "path") {
           const fx = fr.x;
@@ -208,33 +226,31 @@ export default function CardPage() {
           const fw = fr.w;
           const fh = fr.h;
 
-          // Convert px offsets into local 100-based units (because we draw in 100x100)
           const dxLocal = dxPx * (100 / fw);
           const dyLocal = dyPx * (100 / fh);
 
-          // cover crop based on the frame box ratio
-          const { sx, sy, sw, sh } = getCoverCrop(img, fw, fh);
-
           ctx.save();
 
-          // localize to frame, scale to 100x100 space
           ctx.translate(fx, fy);
           ctx.scale(fw / 100, fh / 100);
 
-          // apply transform around center (same order as SVG)
           ctx.translate(50, 50);
           ctx.translate(dxLocal, dyLocal);
           ctx.rotate(rotRad);
           ctx.scale(sc, sc);
           ctx.translate(-50, -50);
 
-          // ✅ clip in SAME local space
           const sid = p.shape as keyof typeof SHAPES;
           SHAPES[sid].canvasPath(ctx, 100);
           ctx.clip();
 
-          // draw into 0..100
-          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 100, 100);
+          if (fit === "contain") {
+            const { dx, dy, dw, dh } = getContainDestRect(img, 100, 100);
+            ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, dw, dh);
+          } else {
+            const { sx, sy, sw, sh } = getCoverCrop(img, fw, fh);
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 100, 100);
+          }
 
           ctx.restore();
         } else {
@@ -244,8 +260,6 @@ export default function CardPage() {
           const fh = fr.h;
           const r = fr.r ?? 0;
 
-          const { sx, sy, sw, sh } = getCoverCrop(img, fw, fh);
-
           ctx.save();
           clipRoundedRect(ctx, fx, fy, fw, fh, r);
 
@@ -254,12 +268,29 @@ export default function CardPage() {
           ctx.rotate(rotRad);
           ctx.scale(sc, sc);
 
-          ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh);
+          if (fit === "contain") {
+            const { dx, dy, dw, dh } = getContainDestRect(img, fw, fh);
+            ctx.drawImage(
+              img,
+              0,
+              0,
+              img.width,
+              img.height,
+              -fw / 2 + dx,
+              -fh / 2 + dy,
+              dw,
+              dh
+            );
+          } else {
+            const { sx, sy, sw, sh } = getCoverCrop(img, fw, fh);
+            ctx.drawImage(img, sx, sy, sw, sh, -fw / 2, -fh / 2, fw, fh);
+          }
+
           ctx.restore();
         }
       }
 
-      // message (draw once)
+      // message (same as yours)
       const msg = card.message || "";
       const scale = W / PREVIEW_W;
 
@@ -314,6 +345,7 @@ export default function CardPage() {
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Card</h1>
+
       <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
         <Link to="/create">← Back</Link>
         <button onClick={exportStory} disabled={!card || exporting}>
@@ -348,65 +380,62 @@ export default function CardPage() {
             }}
           />
 
-          {card.photoUrl && frame?.kind === "path" && (
-            <svg
-              viewBox="0 0 1080 1920"
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-              }}
-            >
-              <defs>
-                {tpl.frames.map((fr, i) => {
-                  const p = getPhotoForFrame(i);
-                  if (!p || fr.kind !== "path") return null;
-                  return (
-                    <clipPath key={i} id={`frameClip-${i}`}>
-                      <path
-                        d={SHAPES[p.shape].svgPath}
-                        transform={`translate(${fr.x}, ${fr.y}) scale(${
-                          fr.w / 100
-                        }, ${fr.h / 100})`}
-                      />
-                    </clipPath>
-                  );
-                })}
-              </defs>
-
+          <svg
+            viewBox="0 0 1080 1920"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+            }}
+          >
+            <defs>
               {tpl.frames.map((fr, i) => {
                 const p = getPhotoForFrame(i);
-                if (!p) return null;
-
-                if (fr.kind === "path") {
-                  return (
-                    <image
-                      key={i}
-                      href={p.url}
-                      x={fr.x}
-                      y={fr.y}
-                      width={fr.w}
-                      height={fr.h}
-                      preserveAspectRatio="xMidYMid slice"
-                      clipPath={`url(#frameClip-${i})`}
-                      style={{
-                        transformOrigin: `${fr.x + fr.w / 2}px ${
-                          fr.y + fr.h / 2
-                        }px`,
-                        transform: `translate(${p.x * previewFactor}px, ${
-                          p.y * previewFactor
-                        }px) rotate(${p.rotate}deg) scale(${p.scale})`,
-                      }}
+                if (!p || fr.kind !== "path") return null;
+                return (
+                  <clipPath key={i} id={`frameClip-${i}`}>
+                    <path
+                      d={SHAPES[p.shape].svgPath}
+                      transform={`translate(${fr.x}, ${fr.y}) scale(${
+                        fr.w / 100
+                      }, ${fr.h / 100})`}
                     />
-                  );
-                }
-
-                // rect frames later
-                return null;
+                  </clipPath>
+                );
               })}
-            </svg>
-          )}
+            </defs>
+
+            {tpl.frames.map((fr, i) => {
+              const p = getPhotoForFrame(i);
+              if (!p || fr.kind !== "path") return null;
+
+              const fit: FitMode = (p.fit ?? "cover") as FitMode;
+
+              return (
+                <image
+                  key={i}
+                  href={p.url}
+                  x={fr.x}
+                  y={fr.y}
+                  width={fr.w}
+                  height={fr.h}
+                  preserveAspectRatio={
+                    fit === "contain" ? "xMidYMid meet" : "xMidYMid slice"
+                  }
+                  clipPath={`url(#frameClip-${i})`}
+                  style={{
+                    transformOrigin: `${fr.x + fr.w / 2}px ${
+                      fr.y + fr.h / 2
+                    }px`,
+                    transform: `translate(${p.x * previewFactor}px, ${
+                      p.y * previewFactor
+                    }px) rotate(${p.rotate}deg) scale(${p.scale})`,
+                  }}
+                />
+              );
+            })}
+          </svg>
 
           <div
             style={{
