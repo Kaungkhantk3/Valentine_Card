@@ -20,6 +20,7 @@ export type TEMPLATE_FRAME =
 
 export type Template = {
   id: string;
+  name?: string;    
   backgroundSrc: string;
   frames: TEMPLATE_FRAME[];
   defaultShape?: ShapeId;
@@ -32,6 +33,7 @@ const HEART_D =
 export const templates: Record<string, Template> = {
   t1: {
      id: "t1",
+     name: "Single Heart Frame",
     backgroundSrc: "/templates/t1.png",
     frames: [{ kind: "path", x: 180, y: 420, w: 720, h: 720, d: HEART_D }],
     defaultShape: "heart",
@@ -40,6 +42,7 @@ export const templates: Record<string, Template> = {
   // ✅ Polaroid stack: 3 frames
  t2: {
   id: "t2",
+  name: "Polaroid Stack",
   backgroundSrc: "/templates/t2.png",
   frames: [
     // Top polaroid - adjust y value based on your PNG

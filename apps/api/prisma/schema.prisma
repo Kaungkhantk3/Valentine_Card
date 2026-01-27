@@ -19,6 +19,8 @@ model Card {
   templateId String   @db.VarChar(50)
   photoUrl   String   @db.Text
   message    String   @db.VarChar(120)
+  textColor String @default("#FFFFFF")
+  textStyle String @default("modern")
   photoX     Float    @default(0)
   photoY     Float    @default(0)
   photoScale Float    @default(1)
@@ -26,6 +28,7 @@ model Card {
   createdAt  DateTime @default(now())
   shape      String   @default("heart") @db.VarChar(16)
   photos     CardPhoto[]
+  stickers   CardSticker[]
 
   @@index([createdAt])
 }
@@ -45,7 +48,26 @@ model CardPhoto {
   rotate     Float    @default(0)
   shape      String   @default("heart") @db.VarChar(16)
   fit        String   @default("cover") @db.VarChar(16)
-  
+
   @@unique([cardId, frameIndex])
+  @@index([cardId])
+}
+
+model CardSticker {
+  id        Int      @id @default(autoincrement())
+
+  cardId    Int
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  stickerId String   @db.VarChar(64)   // e.g. "cupid", "love-you"
+  src       String   @db.VarChar(255)  // e.g. "/stickers/cupid.png"
+
+  // stored in 1080x1920 units, relative to center (same as your CardPreview approach)
+  x         Float    @default(0)
+  y         Float    @default(0)
+  scale     Float    @default(1)
+  rotate    Float    @default(0)
+  z         Int      @default(0)
+
   @@index([cardId])
 }

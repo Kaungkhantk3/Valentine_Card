@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `Card` ADD COLUMN `textColor` VARCHAR(191) NOT NULL DEFAULT '#FFFFFF',
+    ADD COLUMN `textStyle` VARCHAR(191) NOT NULL DEFAULT 'modern';

@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { templates } from "../templates";
-import { SHAPES } from "../shapes";
+import { templates } from "./create/templates";
+import { SHAPES } from "./create/shapes";
 
 const API = import.meta.env.VITE_API_URL as string;
 const PREVIEW_W = 320;
+const fontClass = {
+  handwritten: "font-handwritten",
+  cursive: "font-cursive",
+  modern: "font-modern",
+  classic: "font-classic",
+} as const;
 
 type Shape = "circle" | "heart" | "triangle" | "square";
 type FitMode = "cover" | "contain";
@@ -18,9 +24,19 @@ type CardPhoto = {
   scale: number;
   rotate: number;
   shape: Shape;
-
-  // ✅ NEW
   fit?: FitMode;
+};
+
+type CardSticker = {
+  id: number;
+  src: string;
+  cardId: number;
+  stickerId: string;
+  x: number; // in 1080x1920 units (center-based)
+  y: number;
+  scale: number;
+  rotate: number;
+  z: number;
 };
 
 type Card = {
@@ -29,12 +45,15 @@ type Card = {
   templateId: string;
   photoUrl: string;
   message: string;
+  textColor?: string;
+  textStyle?: "handwritten" | "cursive" | "modern" | "classic";
   photoX: number;
   photoY: number;
   photoScale: number;
   photoRotate: number;
   shape?: Shape;
   photos?: CardPhoto[];
+  stickers?: CardSticker[];
   createdAt: string;
 };
 
@@ -130,6 +149,50 @@ export default function CardPage() {
     }
     if (slug) run();
   }, [slug]);
+
+  async function drawStickers(
+    ctx: CanvasRenderingContext2D,
+    stickers: CardSticker[] | undefined
+  ) {
+    if (!stickers || stickers.length === 0) return;
+
+    const W = 1080;
+    const H = 1920;
+    const cx = W / 2;
+    const cy = H / 2;
+
+    // Matches preview: ~110px sticker on 320px card → ~372px on 1080px
+    const factor = W / PREVIEW_W;
+    const BASE = 110 * factor;
+
+    const cache = new Map<string, HTMLImageElement>();
+
+    async function load(src: string) {
+      if (cache.has(src)) return cache.get(src)!;
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = src;
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = () => rej(new Error("Sticker load failed: " + src));
+      });
+      cache.set(src, img);
+      return img;
+    }
+
+    const ordered = [...stickers].sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+
+    for (const s of ordered) {
+      const img = await load(s.src);
+
+      ctx.save();
+      ctx.translate(cx + s.x * factor, cy + s.y * factor);
+      ctx.rotate((s.rotate * Math.PI) / 180);
+      ctx.scale(s.scale, s.scale);
+      ctx.drawImage(img, -BASE / 2, -BASE / 2, BASE, BASE);
+      ctx.restore();
+    }
+  }
 
   async function exportStory() {
     if (!card) return;
@@ -267,7 +330,6 @@ export default function CardPage() {
           ctx.translate(dxPx, dyPx);
           ctx.rotate(rotRad);
           ctx.scale(sc, sc);
-
           if (fit === "contain") {
             const { dx, dy, dw, dh } = getContainDestRect(img, fw, fh);
             ctx.drawImage(
@@ -290,6 +352,7 @@ export default function CardPage() {
         }
       }
 
+      await drawStickers(ctx, card.stickers);
       // message (same as yours)
       const msg = card.message || "";
       const scale = W / PREVIEW_W;
@@ -299,8 +362,25 @@ export default function CardPage() {
       const fontSize = 16 * scale;
       const lineHeight = fontSize * 1.25;
 
-      ctx.font = `700 ${fontSize}px system-ui`;
-      ctx.fillStyle = "#ffffff";
+      // wait for fonts (important if using custom fonts)
+      await document.fonts.ready;
+
+      // text color
+      ctx.fillStyle = card.textColor ?? "#ffffff";
+
+      // font style
+      const style = card.textStyle ?? "modern";
+
+      const fontFamily =
+        style === "handwritten"
+          ? "cursive"
+          : style === "cursive"
+          ? "cursive"
+          : style === "classic"
+          ? "serif"
+          : "system-ui";
+
+      ctx.font = `700 ${fontSize}px ${fontFamily}`;
       ctx.textAlign = "center";
 
       const maxWidth = W - sidePad * 2;
@@ -437,6 +517,30 @@ export default function CardPage() {
             })}
           </svg>
 
+          {/* Stickers (preview) */}
+          {card.stickers
+            ?.slice()
+            .sort((a, b) => (a.z ?? 0) - (b.z ?? 0))
+            .map((s) => (
+              <img
+                key={s.id}
+                src={s.src}
+                alt=""
+                draggable={false}
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  width: 110,
+                  height: 110,
+                  transform: `translate(calc(-50% + ${s.x}px), calc(-50% + ${s.y}px)) rotate(${s.rotate}deg) scale(${s.scale})`,
+                  transformOrigin: "center",
+                  pointerEvents: "none",
+                  zIndex: 20 + (s.z ?? 0),
+                }}
+              />
+            ))}
+
           <div
             style={{
               position: "absolute",
@@ -444,12 +548,17 @@ export default function CardPage() {
               right: 16,
               bottom: 28,
               textAlign: "center",
-              color: "white",
+              color: (card as any).textColor ?? "white",
               fontSize: 16,
               fontWeight: 700,
               textShadow: "0 2px 10px rgba(0,0,0,0.6)",
               pointerEvents: "none",
             }}
+            className={
+              fontClass[
+                ((card as any).textStyle ?? "modern") as keyof typeof fontClass
+              ]
+            }
           >
             {card.message}
           </div>
