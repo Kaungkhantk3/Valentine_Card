@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `Card` ADD COLUMN `photoRotate` DOUBLE NOT NULL DEFAULT 0;

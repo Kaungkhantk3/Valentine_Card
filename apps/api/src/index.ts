@@ -69,21 +69,29 @@ const PhotoInputSchema = z.object({
   shape: z.string().optional(),
   fit: z.string().optional(),
 });
+const StickerInputSchema = z.object({
+  stickerId: z.string().min(1).max(64),
+  src: z.string().min(1).max(255),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  scale: z.number().optional(),
+  rotate: z.number().optional(),
+  z: z.number().int().optional(),
+});
 
 const CreateCardSchema = z.object({
   templateId: z.string().min(1).max(50),
   message: z.string().min(1).max(120),
-
-  // legacy (optional now)
+  textColor: z.string().min(1).max(32).optional(),
+  textStyle: z.enum(["handwritten", "cursive", "modern", "classic"]).optional(),
   photoUrl: z.string().min(1).optional(),
   photoX: z.number().optional(),
   photoY: z.number().optional(),
   photoScale: z.number().optional(),
   photoRotate: z.number().optional(),
   shape: z.string().optional(),
-
-  // ✅ multi
   photos: z.array(PhotoInputSchema).optional(),
+  stickers: z.array(StickerInputSchema).optional(),
 });
 
 function makeSlug() {
@@ -98,7 +106,12 @@ app.post("/cards", async (req, res) => {
 
   const data = parsed.data;
 
-  const incomingPhotos = (data.photos ?? []).slice().sort((a, b) => a.frameIndex - b.frameIndex);
+  const incomingPhotos = (data.photos ?? [])
+    .slice()
+    .sort((a, b) => a.frameIndex - b.frameIndex);
+  const incomingStickers = (data.stickers ?? [])
+    .slice()
+    .map((s, idx) => ({ ...s, z: s.z ?? idx }));
 
   // keep photo required (your decision)
   const hasMulti = incomingPhotos.length > 0;
@@ -120,7 +133,9 @@ app.post("/cards", async (req, res) => {
   const first = hasMulti ? incomingPhotos[0] : null;
 
   const legacyShapeRaw = (first?.shape ?? data.shape ?? "heart") as string;
-  const legacyShape = allowedShapes.has(legacyShapeRaw) ? legacyShapeRaw : "heart";
+  const legacyShape = allowedShapes.has(legacyShapeRaw)
+    ? legacyShapeRaw
+    : "heart";
 
   const legacyRotate = first?.rotate ?? data.photoRotate ?? 0;
 
@@ -129,48 +144,63 @@ app.post("/cards", async (req, res) => {
   const legacyY = first?.y ?? data.photoY ?? 0;
   const legacyScale = first?.scale ?? data.photoScale ?? 1;
 
-const createData: Parameters<typeof prisma.card.create>[0]["data"] = {
-  slug,
-  templateId: data.templateId,
-  message: data.message,
+  const createData: Parameters<typeof prisma.card.create>[0]["data"] = {
+    slug,
+    templateId: data.templateId,
+    message: data.message,
+    textColor: data.textColor ?? "#FFFFFF",
+    textStyle: data.textStyle ?? "modern",
 
-  // legacy
-  photoUrl: legacyPhotoUrl,
-  photoX: legacyX,
-  photoY: legacyY,
-  photoScale: legacyScale,
-  photoRotate: legacyRotate,
-  shape: legacyShape,
-};
-
-if (hasMulti) {
-  createData.photos = {
-    create: incomingPhotos.map((p) => {
-      const shapeRaw = p.shape ?? "heart";
-      const shape = allowedShapes.has(shapeRaw) ? shapeRaw : "heart";
-
-      const fitRaw = p.fit ?? "cover";
-      const fit = allowedFits.has(fitRaw) ? fitRaw : "cover";
-
-      return {
-        frameIndex: p.frameIndex,
-        url: p.url,
-        x: p.x ?? 0,
-        y: p.y ?? 0,
-        scale: p.scale ?? 1,
-        rotate: p.rotate ?? 0,
-        shape,
-        fit,
-      };
-    }),
+    // legacy
+    photoUrl: legacyPhotoUrl,
+    photoX: legacyX,
+    photoY: legacyY,
+    photoScale: legacyScale,
+    photoRotate: legacyRotate,
+    shape: legacyShape,
   };
-}
 
-const card = await prisma.card.create({
-  data: createData,
-  select: { slug: true },
-});
+  if (hasMulti) {
+    createData.photos = {
+      create: incomingPhotos.map((p) => {
+        const shapeRaw = p.shape ?? "heart";
+        const shape = allowedShapes.has(shapeRaw) ? shapeRaw : "heart";
 
+        const fitRaw = p.fit ?? "cover";
+        const fit = allowedFits.has(fitRaw) ? fitRaw : "cover";
+
+        return {
+          frameIndex: p.frameIndex,
+          url: p.url,
+          x: p.x ?? 0,
+          y: p.y ?? 0,
+          scale: p.scale ?? 1,
+          rotate: p.rotate ?? 0,
+          shape,
+          fit,
+        };
+      }),
+    };
+  }
+
+  if (incomingStickers.length > 0) {
+    (createData as any).stickers = {
+      create: incomingStickers.map((s) => ({
+        stickerId: s.stickerId,
+        src: s.src,
+        x: s.x ?? 0,
+        y: s.y ?? 0,
+        scale: s.scale ?? 1,
+        rotate: s.rotate ?? 0,
+        z: s.z ?? 0,
+      })),
+    };
+  }
+
+  const card = await prisma.card.create({
+    data: createData,
+    select: { slug: true },
+  });
 
   res.status(201).json(card);
 });
@@ -182,6 +212,7 @@ app.get("/cards/:slug", async (req, res) => {
     where: { slug },
     include: {
       photos: true,
+      stickers: true,
     },
   });
 

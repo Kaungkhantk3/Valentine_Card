@@ -26,3 +26,8 @@
 .animate-fall {
   animation: fall linear infinite;
 }
+
+.font-handwritten { font-family: "YourHandwrittenFont", cursive; }
+.font-cursive { font-family: "YourCursiveFont", cursive; }
+.font-modern { font-family: ui-sans-serif, system-ui; }
+.font-classic { font-family: ui-serif, Georgia, serif; }
