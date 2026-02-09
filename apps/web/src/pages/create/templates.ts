@@ -22,7 +22,7 @@ export type Template = {
   id: string;
   name?: string;
   backgroundSrc: string;
-  frames: TEMPLATE_FRAME[];
+  frames?: TEMPLATE_FRAME[]; // Optional - no frames means free placement
   defaultShape?: ShapeId;
   frameRotations?: number[];
 };
@@ -101,5 +101,19 @@ export const templates: Record<string, Template> = {
     ],
     defaultShape: "square",
     frameRotations: [-13, 3, -10, 10],
+  },
+
+  t7: {
+    id: "t7",
+    name: "Template 7",
+    backgroundSrc: "/templates/t7.png",
+    frames: [], // No frames = free image placement
+  },
+
+  t8: {
+    id: "t8",
+    name: "Template 8",
+    backgroundSrc: "/templates/t8.png",
+    frames: [], // No frames = free image placement
   },
 };

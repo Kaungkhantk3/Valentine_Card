@@ -54,6 +54,9 @@ export default function CreatePage() {
     setTextLayers,
     activeTextId,
     setActiveTextId,
+    addText,
+    removeText,
+    updateActiveText,
 
     // Reveal Type
     revealType,
@@ -139,6 +142,12 @@ export default function CreatePage() {
         setTextColor={setTextColor}
         textStyle={textStyle}
         setTextStyle={setTextStyle}
+        textLayers={textLayers}
+        activeTextId={activeTextId}
+        setActiveTextId={setActiveTextId}
+        addText={addText}
+        removeText={removeText}
+        updateActiveText={updateActiveText}
         stickers={stickers}
         activeStickerId={activeStickerId}
         addSticker={addSticker}

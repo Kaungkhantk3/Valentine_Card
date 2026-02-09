@@ -1,3 +1,4 @@
+import { Plus, Trash2 } from "lucide-react";
 import type { PanelSnap, TextStyle } from "../types";
 
 const fontClass = {
@@ -15,6 +16,12 @@ interface TextTabProps {
   textStyle: TextStyle;
   setTextStyle: (style: TextStyle) => void;
   setPanelSnap: (snap: PanelSnap) => void;
+  textLayers: any[];
+  activeTextId: string | null;
+  setActiveTextId: (id: string | null) => void;
+  addText: () => void;
+  removeText: (id: string) => void;
+  updateActiveText: (patch: any) => void;
 }
 
 export default function TextTab({
@@ -25,6 +32,12 @@ export default function TextTab({
   textStyle,
   setTextStyle,
   setPanelSnap,
+  textLayers,
+  activeTextId,
+  setActiveTextId,
+  addText,
+  removeText,
+  updateActiveText,
 }: TextTabProps) {
   return (
     <div>
@@ -116,13 +129,98 @@ export default function TextTab({
           (This affects preview + export. Font selection is UI-only for now.)
         </div>
 
-        <button
-          type="button"
-          onClick={() => setPanelSnap("collapsed")}
-          className="mt-3 w-full rounded-2xl bg-pink-500 text-white font-extrabold py-3 active:scale-95 transition"
-        >
-          Done
-        </button>
+        <div className="mt-3 flex gap-3">
+          <button
+            type="button"
+            onClick={() => setMessage("")}
+            className="flex-1 rounded-2xl bg-white border-2 border-slate-300 text-slate-600 font-extrabold py-3 active:scale-95 transition hover:bg-slate-50"
+          >
+            Delete Text
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanelSnap("collapsed")}
+            className="flex-1 rounded-2xl bg-pink-500 text-white font-extrabold py-3 active:scale-95 transition"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+
+      {/* Additional Text Layers */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-extrabold text-slate-700">
+            Additional Text ({textLayers.length - 1}/4)
+          </div>
+          <button
+            type="button"
+            onClick={addText}
+            disabled={textLayers.length >= 5}
+            className={[
+              "flex items-center gap-2 px-3 py-2 rounded-xl font-bold text-sm active:scale-95 transition",
+              textLayers.length >= 5
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-pink-500 text-white",
+            ].join(" ")}
+          >
+            <Plus size={16} />
+            Add Text
+          </button>
+        </div>
+
+        {textLayers
+          .filter((t) => t.id !== "msg_main")
+          .map((textLayer) => {
+            const isActive = textLayer.id === activeTextId;
+            return (
+              <div
+                key={textLayer.id}
+                className={[
+                  "mb-3 p-3 rounded-2xl border-2 transition cursor-pointer",
+                  isActive
+                    ? "bg-white border-pink-400"
+                    : "bg-white/60 border-white",
+                ].join(" ")}
+                onClick={() => setActiveTextId(textLayer.id)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-bold text-slate-600">
+                    Text Layer
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeText(textLayer.id);
+                    }}
+                    className="p-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 active:scale-95 transition"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <input
+                  value={textLayer.content}
+                  maxLength={200}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveTextId(textLayer.id);
+                  }}
+                  onChange={(e) => {
+                    setActiveTextId(textLayer.id);
+                    updateActiveText({ content: e.target.value });
+                  }}
+                  onFocus={() => setPanelSnap("full")}
+                  placeholder="Type text..."
+                  style={{ color: textLayer.color }}
+                  className={[
+                    "w-full bg-transparent outline-none text-sm font-bold placeholder:text-slate-300",
+                    fontClass[textLayer.style as keyof typeof fontClass],
+                  ].join(" ")}
+                />
+              </div>
+            );
+          })}
       </div>
     </div>
   );

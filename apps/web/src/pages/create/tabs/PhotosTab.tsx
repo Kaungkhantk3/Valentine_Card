@@ -40,7 +40,7 @@ export default function PhotosTab({
           </div>
         </div>
         <div className="text-xs font-bold text-slate-400">
-          {Object.keys(photosByFrame).length}/{tpl.frames.length}
+          {Object.keys(photosByFrame).length}/{tpl.frames?.length ?? MAX_PHOTOS}
         </div>
       </div>
 

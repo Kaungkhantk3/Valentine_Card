@@ -125,7 +125,7 @@ const TextLayerInputSchema = z.object({
 
 const CreateCardSchema = z.object({
   templateId: z.string().min(1).max(50),
-  message: z.string().min(1).max(120),
+  message: z.string().max(120).default(""),
   textColor: z.string().min(1).max(32).optional(),
   textStyle: z
     .enum(["handwritten", "cursive", "modern", "classic", "elegant"])
@@ -162,7 +162,7 @@ app.post("/cards", async (req, res) => {
   console.log("Creating card with revealType:", data.revealType);
 
   // Sanitize text inputs to prevent XSS
-  const sanitizedMessage = data.message?.replace(/[<>"']/g, "");
+  const sanitizedMessage = (data.message ?? "").replace(/[<>"']/g, "");
 
   const incomingPhotos = (data.photos ?? [])
     .slice()
@@ -174,13 +174,9 @@ app.post("/cards", async (req, res) => {
     .slice()
     .map((t, idx) => ({ ...t, z: t.z ?? idx }));
 
-  // keep photo required (your decision)
+  // photos are optional
   const hasMulti = incomingPhotos.length > 0;
   const hasLegacy = !!data.photoUrl;
-
-  if (!hasMulti && !hasLegacy) {
-    return res.status(400).json({ error: "Photo required" });
-  }
 
   // ensure unique slug and editToken
   let slug = makeSlug();

@@ -35,7 +35,7 @@ export function useEditorState() {
 
   // ----- Editor State -----
   const [tab, setTab] = useState<TabId>("layout");
-  const [message, setMessage] = useState("Hello Valentine");
+  const [message, setMessage] = useState("Heppy Valentine's Day!");
   const [loading, setLoading] = useState(false);
   const [panelSnap, setPanelSnap] = useState<PanelSnap>("half");
   const [error, setError] = useState("");
@@ -53,7 +53,7 @@ export function useEditorState() {
   const [textLayers, setTextLayers] = useState<TextLayer[]>([
     {
       id: "msg_main",
-      content: "Hello Valentine",
+      content: "Happy Valentine's Day!",
       style: "modern",
       color: "#FF3B8E",
       x: 0,
@@ -103,12 +103,6 @@ export function useEditorState() {
       .map(([k, v]) => ({ frameIndex: Number(k), ...v }))
       .sort((a, b) => a.frameIndex - b.frameIndex);
 
-    if (entries.length === 0) {
-      setError("Please select images");
-      setTab("photos");
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -125,6 +119,10 @@ export function useEditorState() {
         })),
       );
 
+      const filteredTextLayers = textLayers
+        .filter((t) => t.content.trim().length > 0)
+        .map(({ id, ...rest }) => rest);
+
       const data = await createCard(
         tpl.id,
         message,
@@ -132,7 +130,7 @@ export function useEditorState() {
         textStyle,
         uploaded,
         stickers.map(({ id, ...rest }) => rest),
-        textLayers.map(({ id, ...rest }) => rest),
+        filteredTextLayers,
         revealType,
       );
 

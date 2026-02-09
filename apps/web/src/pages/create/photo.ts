@@ -2,7 +2,9 @@ import type { PhotoState, FitMode } from "./types";
 import type { ShapeId } from "./shapes";
 import React from "react";
 
-export async function getImageSize(file: File): Promise<{ w: number; h: number }> {
+export async function getImageSize(
+  file: File,
+): Promise<{ w: number; h: number }> {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
@@ -22,7 +24,12 @@ export async function getImageSize(file: File): Promise<{ w: number; h: number }
   }
 }
 
-export function chooseFit(iw: number, ih: number, fw: number, fh: number): FitMode {
+export function chooseFit(
+  iw: number,
+  ih: number,
+  fw: number,
+  fh: number,
+): FitMode {
   const imgR = iw / ih;
   const frameR = fw / fh;
   const ratioDiff = Math.max(imgR / frameR, frameR / imgR);
@@ -43,7 +50,9 @@ export function cleanupPreviewUrl(url?: string) {
 export async function handleSelectFiles(
   files: File[],
   tpl: any,
-  setPhotosByFrame: React.Dispatch<React.SetStateAction<Record<number, PhotoState>>>
+  setPhotosByFrame: React.Dispatch<
+    React.SetStateAction<Record<number, PhotoState>>
+  >,
 ) {
   if (files.length === 0) return;
 
@@ -51,21 +60,22 @@ export async function handleSelectFiles(
     files.map(async (f) => {
       const { w, h } = await getImageSize(f);
       return { file: f, w, h };
-    })
+    }),
   );
 
   setPhotosByFrame((prev) => {
     const next = { ...prev };
+    const framesCount = (tpl.frames?.length ?? 0) > 0 ? tpl.frames.length : 5; // Use 5 as max if no frames (free placement)
 
     let idx = 0;
-    while (idx < tpl.frames.length && next[idx]) idx++;
+    while (idx < framesCount && next[idx]) idx++;
 
     for (const m of meta) {
-      if (idx >= tpl.frames.length) break;
+      if (idx >= framesCount) break;
 
-      const fr = tpl.frames[idx];
-      const fit = chooseFit(m.w, m.h, fr.w, fr.h);
-      const scale = initialScaleForFit(fit);
+      const fr = tpl.frames?.[idx];
+      const fit = fr ? chooseFit(m.w, m.h, fr.w, fr.h) : "cover";
+      const scale = fr ? initialScaleForFit(fit) : 1;
 
       const defaultShape = (tpl.defaultShape ?? "heart") as ShapeId;
       const autoRotate = tpl.frameRotations?.[idx] ?? 0;
@@ -94,7 +104,9 @@ export async function handleSelectFiles(
 
 export function removePhoto(
   frameIndex: number,
-  setPhotosByFrame: React.Dispatch<React.SetStateAction<Record<number, PhotoState>>>
+  setPhotosByFrame: React.Dispatch<
+    React.SetStateAction<Record<number, PhotoState>>
+  >,
 ) {
   setPhotosByFrame((prev) => {
     const p = prev[frameIndex];

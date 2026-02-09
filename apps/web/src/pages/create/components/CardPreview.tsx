@@ -363,13 +363,16 @@ function TextElement({
     >
       <div
         className={[
-          "font-extrabold text-center select-none whitespace-nowrap px-2",
+          "font-extrabold text-center select-none px-2",
           selected ? "outline outline-2 outline-pink-400 rounded-lg" : "",
           fontClass[t.style as TextStyle],
         ].join(" ")}
         style={{
           color: t.color,
           textShadow: "0 2px 12px rgba(0,0,0,0.55)",
+          maxWidth: "280px",
+          wordWrap: "break-word",
+          overflowWrap: "break-word",
         }}
       >
         {t.content}
@@ -453,7 +456,8 @@ export default function CardPreview({
 }: CardPreviewProps) {
   // ----- Frame Styles (for click/drag overlay) -----
   const frameStyles = useMemo(() => {
-    return tpl.frames.map((fr: any) => ({
+    const frames = tpl.frames ?? [];
+    return frames.map((fr: any) => ({
       left: `${(fr.x / 1080) * 100}%`,
       top: `${(fr.y / 1920) * 100}%`,
       width: `${(fr.w / 1080) * 100}%`,
@@ -509,7 +513,7 @@ export default function CardPreview({
               className="absolute inset-0 w-full h-full pointer-events-none"
             >
               <defs>
-                {tpl.frames.map((fr: any, i: number) => {
+                {(tpl.frames ?? []).map((fr: any, i: number) => {
                   const p = photosByFrame[i];
                   if (!p) return null;
 
@@ -528,9 +532,21 @@ export default function CardPreview({
 
                   return null;
                 })}
+
+                {/* Defs for free-placement photo shapes */}
+                {(!tpl.frames || tpl.frames.length === 0) &&
+                  Object.entries(photosByFrame).map(([frameIdx, p]) => {
+                    const i = Number(frameIdx);
+                    const shape = SHAPES[p.shape];
+                    return (
+                      <clipPath key={`clip-${i}`} id={`freePlacementClip-${i}`}>
+                        <path d={shape.svgPath} transform="scale(2, 2)" />
+                      </clipPath>
+                    );
+                  })}
               </defs>
 
-              {tpl.frames.map((fr: any, i: number) => {
+              {(tpl.frames ?? []).map((fr: any, i: number) => {
                 const p = photosByFrame[i];
                 if (!p) return null;
 
@@ -563,8 +579,54 @@ export default function CardPreview({
               })}
             </svg>
 
+            {/* Free-placement photos (for templates without frames like t7, t8) */}
+            {(!tpl.frames || tpl.frames.length === 0) &&
+              Object.entries(photosByFrame)
+                .sort((a, b) => Number(a[0]) - Number(b[0]))
+                .map(([frameIdx, p]) => {
+                  const i = Number(frameIdx);
+                  const isActive = i === activeFrame;
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => setActiveFrame(i)}
+                      style={{
+                        position: "absolute",
+                        left: "50%",
+                        top: "50%",
+                        width: 200,
+                        height: 200,
+                        transform: `translate(calc(-50% + ${p.x * factor}px), calc(-50% + ${p.y * factor}px)) rotate(${p.rotate}deg) scale(${p.scale})`,
+                        transformOrigin: "center",
+                        cursor: "grab",
+                        zIndex: 15,
+                      }}
+                      onPointerDown={(e) => onOverlayPointerDown(i, e)}
+                      onPointerMove={(e) => onOverlayPointerMove(i, e)}
+                      onPointerUp={(e) => onOverlayPointerUp(i, e)}
+                      onPointerCancel={(e) => onOverlayPointerUp(i, e)}
+                    >
+                      <img
+                        src={p.previewUrl}
+                        alt=""
+                        draggable={false}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          clipPath: `url(#freePlacementClip-${i})`,
+                          border: isActive
+                            ? "3px solid rgb(236, 72, 153)"
+                            : "1px solid rgba(255,255,255,0.3)",
+                          transition: "border 0.2s",
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+
             {/* Overlay capture layer (for gestures + selection) */}
-            {tpl.frames.map((_: any, i: number) => {
+            {(tpl.frames ?? []).map((_: any, i: number) => {
               const isActive = i === activeFrame;
               const hasPhoto = !!photosByFrame[i];
 
@@ -625,7 +687,10 @@ export default function CardPreview({
                   className="w-12 h-12 rounded-2xl bg-white/75 border border-white shadow-sm flex items-center justify-center active:scale-95 transition"
                   onClick={() =>
                     setActiveFrame((x: number) =>
-                      Math.max(0, Math.min(x - 1, tpl.frames.length - 1)),
+                      Math.max(
+                        0,
+                        Math.min(x - 1, (tpl.frames?.length ?? 0) - 1),
+                      ),
                     )
                   }
                   aria-label="Previous frame"
@@ -637,7 +702,10 @@ export default function CardPreview({
                   className="w-12 h-12 rounded-2xl bg-white/75 border border-white shadow-sm flex items-center justify-center active:scale-95 transition"
                   onClick={() =>
                     setActiveFrame((x: number) =>
-                      Math.max(0, Math.min(x + 1, tpl.frames.length - 1)),
+                      Math.max(
+                        0,
+                        Math.min(x + 1, (tpl.frames?.length ?? 0) - 1),
+                      ),
                     )
                   }
                   aria-label="Next frame"
