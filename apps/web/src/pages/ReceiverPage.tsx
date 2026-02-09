@@ -382,7 +382,7 @@ export default function ReceiverPage() {
                     }}
                   >
                     <defs>
-                      {tpl.frames.map((fr, i) => {
+                      {(tpl.frames ?? []).map((fr, i) => {
                         const p = getPhotoForFrame(i);
                         if (!p || fr.kind !== "path") return null;
                         return (
@@ -398,7 +398,7 @@ export default function ReceiverPage() {
                       })}
                     </defs>
 
-                    {tpl.frames.map((fr, i) => {
+                    {(tpl.frames ?? []).map((fr, i) => {
                       const p = getPhotoForFrame(i);
                       if (!p || fr.kind !== "path") return null;
 
@@ -431,6 +431,62 @@ export default function ReceiverPage() {
                       );
                     })}
                   </svg>
+
+                  {/* SVG defs for free-placement photo shapes */}
+                  {(!tpl.frames || tpl.frames.length === 0) && (
+                    <svg
+                      style={{
+                        position: "absolute",
+                        width: 0,
+                        height: 0,
+                        pointerEvents: "none",
+                      }}
+                    >
+                      <defs>
+                        {card.photos?.map((p) => {
+                          const shape = SHAPES[p.shape];
+                          return (
+                            <clipPath
+                              key={`clip-${p.id}`}
+                              id={`freePlacementClip-${p.id}`}
+                            >
+                              <path d={shape.svgPath} transform="scale(2, 2)" />
+                            </clipPath>
+                          );
+                        })}
+                      </defs>
+                    </svg>
+                  )}
+
+                  {/* Free-placement photos (for templates without frames like t7, t8) */}
+                  {(!tpl.frames || tpl.frames.length === 0) &&
+                    card.photos
+                      ?.slice()
+                      .sort((a, b) => (a.frameIndex ?? 0) - (b.frameIndex ?? 0))
+                      .map((p) => {
+                        const previewFactor = 1080 / PREVIEW_W;
+                        return (
+                          <img
+                            key={p.id}
+                            src={p.url}
+                            alt=""
+                            draggable={false}
+                            style={{
+                              position: "absolute",
+                              left: "50%",
+                              top: "50%",
+                              width: 200,
+                              height: 200,
+                              transform: `translate(calc(-50% + ${p.x * previewFactor}px), calc(-50% + ${p.y * previewFactor}px)) rotate(${p.rotate}deg) scale(${p.scale})`,
+                              transformOrigin: "center",
+                              pointerEvents: "none",
+                              zIndex: 15,
+                              objectFit: "cover",
+                              clipPath: `url(#freePlacementClip-${p.id})`,
+                            }}
+                          />
+                        );
+                      })}
 
                   {/* Stickers */}
                   {card.stickers
@@ -481,7 +537,9 @@ export default function ReceiverPage() {
                             textShadow: "0 2px 10px rgba(0,0,0,0.6)",
                             pointerEvents: "none",
                             zIndex: 30 + (t.z ?? 0),
-                            whiteSpace: "nowrap",
+                            maxWidth: "280px",
+                            wordWrap: "break-word",
+                            overflowWrap: "break-word",
                             padding: "0 8px",
                           }}
                           className={

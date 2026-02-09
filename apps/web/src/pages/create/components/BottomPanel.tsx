@@ -79,6 +79,12 @@ interface BottomPanelProps {
   setTextColor: (color: string) => void;
   textStyle: TextStyle;
   setTextStyle: (style: TextStyle) => void;
+  textLayers: any[];
+  activeTextId: string | null;
+  setActiveTextId: (id: string | null) => void;
+  addText: () => void;
+  removeText: (id: string) => void;
+  updateActiveText: (patch: any) => void;
 
   //  Sticker state/actions
   stickers: any[];
@@ -116,6 +122,12 @@ export default function BottomPanel({
   setTextColor,
   textStyle,
   setTextStyle,
+  textLayers,
+  activeTextId,
+  setActiveTextId,
+  addText,
+  removeText,
+  updateActiveText,
 
   stickers,
   activeStickerId,
@@ -208,6 +220,12 @@ export default function BottomPanel({
                   textStyle={textStyle}
                   setTextStyle={setTextStyle}
                   setPanelSnap={setPanelSnap}
+                  textLayers={textLayers}
+                  activeTextId={activeTextId}
+                  setActiveTextId={setActiveTextId}
+                  addText={addText}
+                  removeText={removeText}
+                  updateActiveText={updateActiveText}
                 />
               )}
 
