@@ -9,54 +9,89 @@ export default function BreakHeart({ onUnlock }: RevealMechanismProps) {
   const [hasUnlocked, setHasUnlocked] = useState(false);
   const keyRef = useRef<HTMLDivElement>(null);
   const lockRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const keyPosRef = useRef({ x: 0, y: 200 });
+  const initialPosRef = useRef({ pointerX: 0, pointerY: 0, keyX: 0, keyY: 0 });
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
+
+    // Record initial positions
+    initialPosRef.current = {
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+      keyX: keyPosRef.current.x,
+      keyY: keyPosRef.current.y,
+    };
+
     setIsDragging(true);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (!initialPosRef.current) return;
+    e.preventDefault();
 
-    const container = e.currentTarget.parentElement;
+    const container = containerRef.current;
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
 
-    setKeyPosition({ x, y });
+    // Calculate how much the pointer moved
+    const pointerDeltaX = e.clientX - initialPosRef.current.pointerX;
+    const pointerDeltaY = e.clientY - initialPosRef.current.pointerY;
 
-    // Check if key is close to lock
-    if (lockRef.current && keyRef.current) {
-      const lockRect = lockRef.current.getBoundingClientRect();
-      const keyRect = keyRef.current.getBoundingClientRect();
+    // Apply pointer movement to initial key position
+    const newX = initialPosRef.current.keyX + pointerDeltaX;
+    const newY = initialPosRef.current.keyY + pointerDeltaY;
 
-      const lockCenterX = lockRect.left + lockRect.width / 2;
-      const lockCenterY = lockRect.top + lockRect.height / 2;
-      const keyCenterX = keyRect.left + keyRect.width / 2;
-      const keyCenterY = keyRect.top + keyRect.height / 2;
+    keyPosRef.current = { x: newX, y: newY };
 
-      const dx = lockCenterX - keyCenterX;
-      const dy = lockCenterY - keyCenterY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < 50 && !isUnlocking) {
-        // Key is close to lock - unlock!
-        setIsUnlocking(true);
-        setIsDragging(false);
-        setTimeout(() => {
-          setHasUnlocked(true);
-          setTimeout(() => {
-            onUnlock();
-          }, 1000);
-        }, 800);
-      }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
     }
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      setKeyPosition({ x: newX, y: newY });
+
+      // Check if key is close to lock - inside rAF for better performance
+      if (lockRef.current && keyRef.current && !isUnlocking) {
+        const lockRect = lockRef.current.getBoundingClientRect();
+        const keyRect = keyRef.current.getBoundingClientRect();
+
+        const lockCenterX = lockRect.left + lockRect.width / 2;
+        const lockCenterY = lockRect.top + lockRect.height / 2;
+        const keyCenterX = keyRect.left + keyRect.width / 2;
+        const keyCenterY = keyRect.top + keyRect.height / 2;
+
+        const dx = lockCenterX - keyCenterX;
+        const dy = lockCenterY - keyCenterY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 50) {
+          // Key is close to lock - unlock!
+          setIsUnlocking(true);
+          setIsDragging(false);
+          setTimeout(() => {
+            setHasUnlocked(true);
+            setTimeout(() => {
+              onUnlock();
+            }, 1000);
+          }, 800);
+        }
+      }
+    });
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     setIsDragging(false);
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    setKeyPosition(keyPosRef.current);
   };
 
   return (
@@ -72,7 +107,15 @@ export default function BreakHeart({ onUnlock }: RevealMechanismProps) {
       </div>
 
       {/* Container for draggable area */}
-      <div className="relative w-full max-w-md h-96">
+      <div
+        ref={containerRef}
+        className="relative w-full max-w-md h-96 touch-none"
+        style={{ touchAction: "none" }}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+      >
         {/* Heart-shaped Lock */}
         <div
           ref={lockRef}
@@ -156,16 +199,16 @@ export default function BreakHeart({ onUnlock }: RevealMechanismProps) {
         {!isUnlocking && (
           <div
             ref={keyRef}
-            className={`absolute left-1/2 top-1/2 cursor-grab active:cursor-grabbing transition-transform ${
+            className={`absolute left-1/2 top-1/2 cursor-grab active:cursor-grabbing transition-transform touch-none ${
               isDragging ? "scale-110" : "scale-100"
             }`}
             style={{
-              transform: `translate(calc(-50% + ${keyPosition.x}px), calc(-50% + ${keyPosition.y}px))`,
+              transform: `translate3d(calc(-50% + ${keyPosition.x}px), calc(-50% + ${keyPosition.y}px), 0)`,
+              willChange: "transform",
+              touchAction: "none",
+              pointerEvents: "auto",
             }}
             onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
           >
             <div className="relative">
               {/* Key glow */}

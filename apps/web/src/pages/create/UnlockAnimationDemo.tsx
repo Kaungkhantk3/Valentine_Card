@@ -140,27 +140,36 @@ export default function UnlockAnimationDemo() {
       {/* Content */}
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Tabs */}
-        <div className="flex gap-3 mb-8 justify-center">
-          {Object.values(unlockMethods).map((method) => {
-            const TabIcon = method.icon;
-            const isActive = activeTab === method.id;
-            return (
-              <button
-                key={method.id}
-                onClick={() => setActiveTab(method.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-full border-2 transition-all ${
-                  isActive
-                    ? method.color === "pink"
-                      ? "border-pink-500 bg-pink-50 text-pink-700 font-semibold shadow-md"
-                      : "border-purple-500 bg-purple-50 text-purple-700 font-semibold shadow-md"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                }`}
-              >
-                <TabIcon className="w-5 h-5" />
-                <span className="text-base">{method.title}</span>
-              </button>
-            );
-          })}
+        <div
+          className="overflow-x-auto scrollbar-hide"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div className="flex gap-3 mb-8 pl-6 pr-6 min-w-max md:min-w-0 md:justify-center">
+            <div className="flex-shrink-0 w-0"></div>
+            {Object.values(unlockMethods).map((method) => {
+              const TabIcon = method.icon;
+              const isActive = activeTab === method.id;
+              return (
+                <button
+                  key={method.id}
+                  onClick={() => setActiveTab(method.id)}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-full border-2 transition-all whitespace-nowrap flex-shrink-0 ${
+                    isActive
+                      ? method.color === "pink"
+                        ? "border-pink-500 bg-pink-50 text-pink-700 font-semibold shadow-md"
+                        : method.color === "purple"
+                          ? "border-purple-500 bg-purple-50 text-purple-700 font-semibold shadow-md"
+                          : "border-rose-500 bg-rose-50 text-rose-700 font-semibold shadow-md"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                  }`}
+                >
+                  <TabIcon className="w-5 h-5" />
+                  <span className="text-base">{method.title}</span>
+                </button>
+              );
+            })}
+            <div className="flex-shrink-0 w-0"></div>
+          </div>
         </div>
 
         {/* Video and Instructions */}

@@ -107,27 +107,38 @@ export default function UnlockManualModal({
           </div>
 
           {/* Tabs */}
-          <div className="px-6 pt-3 pb-3 flex gap-2 border-b border-slate-100 flex-shrink-0">
-            {Object.values(unlockMethods).map((method) => {
-              const TabIcon = method.icon;
-              const isActive = activeTab === method.id;
-              return (
-                <button
-                  key={method.id}
-                  onClick={() => setActiveTab(method.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all ${
-                    isActive
-                      ? method.color === "pink"
-                        ? "border-pink-500 bg-pink-50 text-pink-700"
-                        : "border-purple-500 bg-purple-50 text-purple-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                  }`}
-                >
-                  <TabIcon className="w-4 h-4" />
-                  <span className="text-sm font-semibold">{method.title}</span>
-                </button>
-              );
-            })}
+          <div
+            className="pt-3 pb-3 border-b border-slate-100 flex-shrink-0 overflow-x-auto scrollbar-hide"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <div className="flex gap-2 pl-6 pr-6">
+              <div className="flex-shrink-0 w-0"></div>
+              {Object.values(unlockMethods).map((method) => {
+                const TabIcon = method.icon;
+                const isActive = activeTab === method.id;
+                return (
+                  <button
+                    key={method.id}
+                    onClick={() => setActiveTab(method.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all whitespace-nowrap flex-shrink-0 ${
+                      isActive
+                        ? method.color === "pink"
+                          ? "border-pink-500 bg-pink-50 text-pink-700"
+                          : method.color === "purple"
+                            ? "border-purple-500 bg-purple-50 text-purple-700"
+                            : "border-rose-500 bg-rose-50 text-rose-700"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    <TabIcon className="w-4 h-4" />
+                    <span className="text-sm font-semibold">
+                      {method.title}
+                    </span>
+                  </button>
+                );
+              })}
+              <div className="flex-shrink-0 w-0"></div>
+            </div>
           </div>
 
           {/* Content - Takes available space */}
