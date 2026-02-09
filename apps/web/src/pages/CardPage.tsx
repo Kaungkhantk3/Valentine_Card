@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { templates } from "./create/templates";
 import { SHAPES } from "./create/shapes";
+import ExportPage from "./ExportPage";
 
 const API = import.meta.env.VITE_API_URL as string;
 const PREVIEW_W = 320;
@@ -10,6 +11,7 @@ const fontClass = {
   cursive: "font-cursive",
   modern: "font-modern",
   classic: "font-classic",
+  elegant: "font-cursive",
 } as const;
 
 type Shape = "circle" | "heart" | "triangle" | "square";
@@ -39,6 +41,18 @@ type CardSticker = {
   z: number;
 };
 
+type CardTextLayer = {
+  id: number;
+  content: string;
+  color: string;
+  style: "handwritten" | "cursive" | "modern" | "classic" | "elegant";
+  x: number;
+  y: number;
+  scale: number;
+  rotate: number;
+  z: number;
+};
+
 type Card = {
   id: number;
   slug: string;
@@ -46,7 +60,7 @@ type Card = {
   photoUrl: string;
   message: string;
   textColor?: string;
-  textStyle?: "handwritten" | "cursive" | "modern" | "classic";
+  textStyle?: "handwritten" | "cursive" | "modern" | "classic" | "elegant";
   photoX: number;
   photoY: number;
   photoScale: number;
@@ -54,6 +68,7 @@ type Card = {
   shape?: Shape;
   photos?: CardPhoto[];
   stickers?: CardSticker[];
+  textLayers?: CardTextLayer[];
   createdAt: string;
 };
 
@@ -84,7 +99,7 @@ function clipRoundedRect(
   y: number,
   w: number,
   h: number,
-  r: number
+  r: number,
 ) {
   const rr = Math.max(0, Math.min(r, Math.min(w, h) / 2));
   ctx.beginPath();
@@ -152,7 +167,7 @@ export default function CardPage() {
 
   async function drawStickers(
     ctx: CanvasRenderingContext2D,
-    stickers: CardSticker[] | undefined
+    stickers: CardSticker[] | undefined,
   ) {
     if (!stickers || stickers.length === 0) return;
 
@@ -220,7 +235,7 @@ export default function CardPage() {
       function getCoverCrop(
         img: HTMLImageElement,
         destW: number,
-        destH: number
+        destH: number,
       ) {
         const imgRatio = img.width / img.height;
         const destRatio = destW / destH;
@@ -245,7 +260,7 @@ export default function CardPage() {
       function getContainDestRect(
         img: HTMLImageElement,
         destW: number,
-        destH: number
+        destH: number,
       ) {
         const imgR = img.width / img.height;
         const destR = destW / destH;
@@ -341,7 +356,7 @@ export default function CardPage() {
               -fw / 2 + dx,
               -fh / 2 + dy,
               dw,
-              dh
+              dh,
             );
           } else {
             const { sx, sy, sw, sh } = getCoverCrop(img, fw, fh);
@@ -375,10 +390,10 @@ export default function CardPage() {
         style === "handwritten"
           ? "cursive"
           : style === "cursive"
-          ? "cursive"
-          : style === "classic"
-          ? "serif"
-          : "system-ui";
+            ? "cursive"
+            : style === "classic"
+              ? "serif"
+              : "system-ui";
 
       ctx.font = `700 ${fontSize}px ${fontFamily}`;
       ctx.textAlign = "center";
@@ -410,7 +425,7 @@ export default function CardPage() {
       const blob: Blob = await new Promise((resolve, reject) => {
         canvas.toBlob(
           (b) => (b ? resolve(b) : reject(new Error("Export failed"))),
-          "image/png"
+          "image/png",
         );
       });
 
@@ -424,145 +439,16 @@ export default function CardPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Card</h1>
-
-      <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-        <Link to="/create">← Back</Link>
-        <button onClick={exportStory} disabled={!card || exporting}>
-          {exporting ? "Exporting..." : "Export 1080×1920 PNG"}
-        </button>
-      </div>
-
       {loading && <div>Loading...</div>}
       {error && <div style={{ color: "crimson" }}>{error}</div>}
 
       {card && (
-        <div
-          style={{
-            width: 320,
-            aspectRatio: "9 / 16",
-            borderRadius: 16,
-            overflow: "hidden",
-            position: "relative",
-            border: "1px solid rgba(255,255,255,0.15)",
-            background: "#111",
-          }}
-        >
-          <img
-            src={templateSrc}
-            alt="template"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
-
-          <svg
-            viewBox="0 0 1080 1920"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-            }}
-          >
-            <defs>
-              {tpl.frames.map((fr, i) => {
-                const p = getPhotoForFrame(i);
-                if (!p || fr.kind !== "path") return null;
-                return (
-                  <clipPath key={i} id={`frameClip-${i}`}>
-                    <path
-                      d={SHAPES[p.shape].svgPath}
-                      transform={`translate(${fr.x}, ${fr.y}) scale(${
-                        fr.w / 100
-                      }, ${fr.h / 100})`}
-                    />
-                  </clipPath>
-                );
-              })}
-            </defs>
-
-            {tpl.frames.map((fr, i) => {
-              const p = getPhotoForFrame(i);
-              if (!p || fr.kind !== "path") return null;
-
-              const fit: FitMode = (p.fit ?? "cover") as FitMode;
-
-              return (
-                <image
-                  key={i}
-                  href={p.url}
-                  x={fr.x}
-                  y={fr.y}
-                  width={fr.w}
-                  height={fr.h}
-                  preserveAspectRatio={
-                    fit === "contain" ? "xMidYMid meet" : "xMidYMid slice"
-                  }
-                  clipPath={`url(#frameClip-${i})`}
-                  style={{
-                    transformOrigin: `${fr.x + fr.w / 2}px ${
-                      fr.y + fr.h / 2
-                    }px`,
-                    transform: `translate(${p.x * previewFactor}px, ${
-                      p.y * previewFactor
-                    }px) rotate(${p.rotate}deg) scale(${p.scale})`,
-                  }}
-                />
-              );
-            })}
-          </svg>
-
-          {/* Stickers (preview) */}
-          {card.stickers
-            ?.slice()
-            .sort((a, b) => (a.z ?? 0) - (b.z ?? 0))
-            .map((s) => (
-              <img
-                key={s.id}
-                src={s.src}
-                alt=""
-                draggable={false}
-                style={{
-                  position: "absolute",
-                  left: "50%",
-                  top: "50%",
-                  width: 110,
-                  height: 110,
-                  transform: `translate(calc(-50% + ${s.x}px), calc(-50% + ${s.y}px)) rotate(${s.rotate}deg) scale(${s.scale})`,
-                  transformOrigin: "center",
-                  pointerEvents: "none",
-                  zIndex: 20 + (s.z ?? 0),
-                }}
-              />
-            ))}
-
-          <div
-            style={{
-              position: "absolute",
-              left: 16,
-              right: 16,
-              bottom: 28,
-              textAlign: "center",
-              color: (card as any).textColor ?? "white",
-              fontSize: 16,
-              fontWeight: 700,
-              textShadow: "0 2px 10px rgba(0,0,0,0.6)",
-              pointerEvents: "none",
-            }}
-            className={
-              fontClass[
-                ((card as any).textStyle ?? "modern") as keyof typeof fontClass
-              ]
-            }
-          >
-            {card.message}
-          </div>
-        </div>
+        <ExportPage
+          card={card}
+          template={tpl}
+          getPhotoForFrame={getPhotoForFrame}
+          onExport={exportStory}
+        />
       )}
     </div>
   );

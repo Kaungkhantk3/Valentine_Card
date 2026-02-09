@@ -24,22 +24,36 @@ export const SHAPES: Record<ShapeId, ShapeDef> = {
 
   square: {
     id: "square",
-    svgPath: "M0 0 H100 V100 H0 Z",
+    svgPath:
+      "M10 0 H90 Q100 0 100 10 V90 Q100 100 90 100 H10 Q0 100 0 90 V10 Q0 0 10 0 Z",
     canvasPath(ctx, size) {
+      const radius = size * 0.1; // 10% rounded corners
       ctx.beginPath();
-      ctx.rect(0, 0, size, size);
+      ctx.moveTo(radius, 0);
+      ctx.lineTo(size - radius, 0);
+      ctx.quadraticCurveTo(size, 0, size, radius);
+      ctx.lineTo(size, size - radius);
+      ctx.quadraticCurveTo(size, size, size - radius, size);
+      ctx.lineTo(radius, size);
+      ctx.quadraticCurveTo(0, size, 0, size - radius);
+      ctx.lineTo(0, radius);
+      ctx.quadraticCurveTo(0, 0, radius, 0);
       ctx.closePath();
     },
   },
 
   triangle: {
     id: "triangle",
-    svgPath: "M50 0 L100 100 L0 100 Z",
+    svgPath:
+      "M50 5 Q52 0 54 3 L97 95 Q100 100 95 100 L5 100 Q0 100 3 95 L46 3 Q48 0 50 5 Z",
     canvasPath(ctx, size) {
+      const r = size * 0.03; // Small rounding factor
       ctx.beginPath();
-      ctx.moveTo(size / 2, 0);
-      ctx.lineTo(size, size);
-      ctx.lineTo(0, size);
+      ctx.moveTo(size / 2, r);
+      ctx.lineTo(size - r, size - r);
+      ctx.quadraticCurveTo(size, size, size / 2 + r, size);
+      ctx.lineTo(r, size);
+      ctx.quadraticCurveTo(0, size, r, size - r);
       ctx.closePath();
     },
   },

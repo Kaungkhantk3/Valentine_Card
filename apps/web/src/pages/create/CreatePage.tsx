@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useEditorState } from "./useEditorState";
 import { useEditorGestures } from "./useEditorGestures";
 import { isTouchDevice } from "./utils";
@@ -8,6 +9,7 @@ import CardPreview from "./components/CardPreview";
 import BottomPanel from "./components/BottomPanel";
 
 export default function CreatePage() {
+  const [searchParams] = useSearchParams();
   const touch = isTouchDevice();
 
   const {
@@ -48,10 +50,26 @@ export default function CreatePage() {
     setTextColor,
     textStyle,
     setTextStyle,
+    textLayers,
+    setTextLayers,
+    activeTextId,
+    setActiveTextId,
+
+    // Reveal Type
+    revealType,
+    setRevealType,
 
     // Actions
     handleCreate,
   } = useEditorState();
+
+  // Handle revealType from URL (when returning from demo page)
+  useEffect(() => {
+    const urlRevealType = searchParams.get("revealType");
+    if (urlRevealType === "findHeart" || urlRevealType === "bringTogether") {
+      setRevealType(urlRevealType);
+    }
+  }, [searchParams, setRevealType]);
 
   const { onOverlayPointerDown, onOverlayPointerMove, onOverlayPointerUp } =
     useEditorGestures(photosByFrame, setPhotosByFrame, setActiveFrame);
@@ -62,7 +80,7 @@ export default function CreatePage() {
 
   const handleOverlayPointerDown = (
     frameIndex: number,
-    e: React.PointerEvent<HTMLDivElement>
+    e: React.PointerEvent<HTMLDivElement>,
   ) => {
     const hasPhoto = onOverlayPointerDown(frameIndex, e);
     if (!hasPhoto) {
@@ -93,6 +111,10 @@ export default function CreatePage() {
           activeStickerId={activeStickerId}
           setActiveStickerId={setActiveStickerId}
           setStickers={setStickers}
+          textLayers={textLayers}
+          activeTextId={activeTextId}
+          setActiveTextId={setActiveTextId}
+          setTextLayers={setTextLayers}
         />
       </main>
 
@@ -122,6 +144,8 @@ export default function CreatePage() {
         addSticker={addSticker}
         removeSticker={removeStickerLayer}
         updateActiveSticker={updateActiveSticker}
+        revealType={revealType}
+        setRevealType={setRevealType}
       />
     </div>
   );

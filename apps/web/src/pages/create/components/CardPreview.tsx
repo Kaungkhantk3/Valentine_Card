@@ -1,11 +1,386 @@
 import React, { useMemo, useRef } from "react";
 import { SHAPES } from "../shapes";
-import type { PhotoState, StickerLayer } from "../types";
+import type { PhotoState, StickerLayer, TextStyle, TextLayer } from "../types";
 import { factor } from "../constants";
+import { dist, angle, clamp } from "../utils";
+
+type Pt = { x: number; y: number };
+
+function midpoint(a: Pt, b: Pt): Pt {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+// Sticker element with gesture support
+function StickerElement({
+  sticker: s,
+  selected,
+  cardRef,
+  setActiveStickerId,
+  setStickers,
+}: {
+  sticker: StickerLayer;
+  selected: boolean;
+  cardRef: React.RefObject<HTMLDivElement | null>;
+  setActiveStickerId: (id: string | null) => void;
+  setStickers: React.Dispatch<React.SetStateAction<StickerLayer[]>>;
+}) {
+  const pointersRef = useRef(new Map<number, Pt>());
+  const gestureRef = useRef<{
+    startX: number;
+    startY: number;
+    ox: number;
+    oy: number;
+    baseScale: number;
+    baseRotate: number;
+    baseDist: number;
+    baseAng: number;
+    baseMid: Pt;
+  } | null>(null);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setActiveStickerId(s.id);
+
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (!gestureRef.current) {
+      gestureRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        ox: s.x,
+        oy: s.y,
+        baseScale: s.scale,
+        baseRotate: s.rotate,
+        baseDist: 1,
+        baseAng: 0,
+        baseMid: { x: e.clientX, y: e.clientY },
+      };
+    } else {
+      gestureRef.current.startX = e.clientX;
+      gestureRef.current.startY = e.clientY;
+      gestureRef.current.ox = s.x;
+      gestureRef.current.oy = s.y;
+      gestureRef.current.baseScale = s.scale;
+      gestureRef.current.baseRotate = s.rotate;
+    }
+
+    // If we now have 2 pointers, snapshot 2-finger baseline
+    if (pointersRef.current.size === 2 && gestureRef.current) {
+      const pts = Array.from(pointersRef.current.values());
+      gestureRef.current.baseDist = dist(pts[0], pts[1]) || 1;
+      gestureRef.current.baseAng = angle(pts[0], pts[1]);
+      gestureRef.current.baseMid = midpoint(pts[0], pts[1]);
+      gestureRef.current.baseScale = s.scale;
+      gestureRef.current.baseRotate = s.rotate;
+      gestureRef.current.ox = s.x;
+      gestureRef.current.oy = s.y;
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = gestureRef.current;
+    if (!g) return;
+
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // 2-finger: pinch + rotate + pan
+    if (pointersRef.current.size === 2) {
+      const pts = Array.from(pointersRef.current.values());
+      const d = dist(pts[0], pts[1]);
+      const a = angle(pts[0], pts[1]);
+      const m = midpoint(pts[0], pts[1]);
+
+      const scaleMul = d / (g.baseDist || 1);
+      const nextScale = clamp(g.baseScale * scaleMul, 0.3, 3);
+
+      const deltaAng = a - g.baseAng;
+      const deltaDeg = (deltaAng * 180) / Math.PI;
+      const nextRotate = g.baseRotate + deltaDeg;
+
+      // Pan (midpoint movement) - slower speed
+      const dxPx = (m.x - g.baseMid.x) * 0.5;
+      const dyPx = (m.y - g.baseMid.y) * 0.5;
+      const dx = dxPx * (1080 / rect.width);
+      const dy = dyPx * (1920 / rect.height);
+
+      setStickers((prev) =>
+        prev.map((st) =>
+          st.id === s.id
+            ? {
+                ...st,
+                scale: nextScale,
+                rotate: nextRotate,
+                x: g.ox + dx,
+                y: g.oy + dy,
+              }
+            : st,
+        ),
+      );
+      return;
+    }
+
+    // 1-finger: drag only - slower speed
+    if (pointersRef.current.size === 1) {
+      const dxPx = (e.clientX - g.startX) * 0.5; // 50% slower
+      const dyPx = (e.clientY - g.startY) * 0.5;
+
+      const dx = dxPx * (1080 / rect.width);
+      const dy = dyPx * (1920 / rect.height);
+
+      setStickers((prev) =>
+        prev.map((st) =>
+          st.id === s.id ? { ...st, x: g.ox + dx, y: g.oy + dy } : st,
+        ),
+      );
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointersRef.current.delete(e.pointerId);
+
+    const g = gestureRef.current;
+    if (!g) return;
+
+    // If one finger remains after multi-touch, reset baselines
+    if (pointersRef.current.size === 1) {
+      const remaining = Array.from(pointersRef.current.values())[0];
+      g.startX = remaining.x;
+      g.startY = remaining.y;
+      g.ox = s.x;
+      g.oy = s.y;
+      g.baseScale = s.scale;
+      g.baseRotate = s.rotate;
+      g.baseMid = remaining;
+      g.baseDist = 1;
+      g.baseAng = 0;
+    }
+
+    // Clear gesture when all pointers are up
+    if (pointersRef.current.size === 0) {
+      gestureRef.current = null;
+    }
+  };
+
+  return (
+    <div
+      className="absolute left-1/2 top-1/2 touch-none z-40"
+      style={{
+        transform: `translate(calc(-50% + ${s.x / factor}px), calc(-50% + ${s.y / factor}px)) rotate(${s.rotate}deg) scale(${s.scale})`,
+        transformOrigin: "center",
+        touchAction: "none",
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      <img
+        src={s.src}
+        alt={s.stickerId}
+        draggable={false}
+        className={[
+          "w-[110px] h-auto select-none",
+          selected ? "ring-2 ring-pink-400 rounded-2xl" : "",
+        ].join(" ")}
+      />
+    </div>
+  );
+}
+
+// Text element with gesture support
+function TextElement({
+  text: t,
+  selected,
+  cardRef,
+  setActiveTextId,
+  setTextLayers,
+}: {
+  text: any; // TextLayer type
+  selected: boolean;
+  cardRef: React.RefObject<HTMLDivElement | null>;
+  setActiveTextId: (id: string | null) => void;
+  setTextLayers: React.Dispatch<React.SetStateAction<any[]>>;
+}) {
+  const pointersRef = useRef(new Map<number, Pt>());
+  const gestureRef = useRef<{
+    startX: number;
+    startY: number;
+    ox: number;
+    oy: number;
+    baseScale: number;
+    baseRotate: number;
+    baseDist: number;
+    baseAng: number;
+    baseMid: Pt;
+  } | null>(null);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setActiveTextId(t.id);
+
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (!gestureRef.current) {
+      gestureRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        ox: t.x,
+        oy: t.y,
+        baseScale: t.scale,
+        baseRotate: t.rotate,
+        baseDist: 1,
+        baseAng: 0,
+        baseMid: { x: e.clientX, y: e.clientY },
+      };
+    } else {
+      gestureRef.current.startX = e.clientX;
+      gestureRef.current.startY = e.clientY;
+      gestureRef.current.ox = t.x;
+      gestureRef.current.oy = t.y;
+      gestureRef.current.baseScale = t.scale;
+      gestureRef.current.baseRotate = t.rotate;
+    }
+
+    // If we now have 2 pointers, snapshot 2-finger baseline
+    if (pointersRef.current.size === 2 && gestureRef.current) {
+      const pts = Array.from(pointersRef.current.values());
+      gestureRef.current.baseDist = dist(pts[0], pts[1]) || 1;
+      gestureRef.current.baseAng = angle(pts[0], pts[1]);
+      gestureRef.current.baseMid = midpoint(pts[0], pts[1]);
+      gestureRef.current.baseScale = t.scale;
+      gestureRef.current.baseRotate = t.rotate;
+      gestureRef.current.ox = t.x;
+      gestureRef.current.oy = t.y;
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = gestureRef.current;
+    if (!g) return;
+
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // 2-finger: pinch + rotate + pan
+    if (pointersRef.current.size === 2) {
+      const pts = Array.from(pointersRef.current.values());
+      const d = dist(pts[0], pts[1]);
+      const a = angle(pts[0], pts[1]);
+      const m = midpoint(pts[0], pts[1]);
+
+      const scaleMul = d / (g.baseDist || 1);
+      const nextScale = clamp(g.baseScale * scaleMul, 0.3, 3);
+
+      const deltaAng = a - g.baseAng;
+      const deltaDeg = (deltaAng * 180) / Math.PI;
+      const nextRotate = g.baseRotate + deltaDeg;
+
+      // Pan (midpoint movement) - slower speed
+      const dxPx = (m.x - g.baseMid.x) * 0.5;
+      const dyPx = (m.y - g.baseMid.y) * 0.5;
+      const dx = dxPx * (1080 / rect.width);
+      const dy = dyPx * (1920 / rect.height);
+
+      setTextLayers((prev) =>
+        prev.map((st) =>
+          st.id === t.id
+            ? {
+                ...st,
+                scale: nextScale,
+                rotate: nextRotate,
+                x: g.ox + dx,
+                y: g.oy + dy,
+              }
+            : st,
+        ),
+      );
+      return;
+    }
+
+    // 1-finger: drag only - slower speed
+    if (pointersRef.current.size === 1) {
+      const dxPx = (e.clientX - g.startX) * 0.5; // 50% slower
+      const dyPx = (e.clientY - g.startY) * 0.5;
+
+      const dx = dxPx * (1080 / rect.width);
+      const dy = dyPx * (1920 / rect.height);
+
+      setTextLayers((prev) =>
+        prev.map((st) =>
+          st.id === t.id ? { ...st, x: g.ox + dx, y: g.oy + dy } : st,
+        ),
+      );
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointersRef.current.delete(e.pointerId);
+
+    const g = gestureRef.current;
+    if (!g) return;
+
+    // If one finger remains after multi-touch, reset baselines
+    if (pointersRef.current.size === 1) {
+      const remaining = Array.from(pointersRef.current.values())[0];
+      g.startX = remaining.x;
+      g.startY = remaining.y;
+      g.ox = t.x;
+      g.oy = t.y;
+      g.baseScale = t.scale;
+      g.baseRotate = t.rotate;
+      g.baseMid = remaining;
+      g.baseDist = 1;
+      g.baseAng = 0;
+    }
+
+    // Clear gesture when all pointers are up
+    if (pointersRef.current.size === 0) {
+      gestureRef.current = null;
+    }
+  };
+
+  return (
+    <div
+      className="absolute left-1/2 top-1/2 touch-none cursor-grab active:cursor-grabbing pointer-events-auto"
+      style={{
+        transform: `translate(calc(-50% + ${t.x / factor}px), calc(-50% + ${t.y / factor}px)) rotate(${t.rotate}deg) scale(${t.scale})`,
+        transformOrigin: "center",
+        touchAction: "none",
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      <div
+        className={[
+          "font-extrabold text-center select-none whitespace-nowrap px-2",
+          selected ? "outline outline-2 outline-pink-400 rounded-lg" : "",
+          fontClass[t.style as TextStyle],
+        ].join(" ")}
+        style={{
+          color: t.color,
+          textShadow: "0 2px 12px rgba(0,0,0,0.55)",
+        }}
+      >
+        {t.content}
+      </div>
+    </div>
+  );
+}
 
 const fontClass = {
   handwritten: "font-handwritten",
-  cursive: "font-cursive",
+  elegant: "font-cursive",
   modern: "font-modern",
   classic: "font-classic",
 } as const;
@@ -16,22 +391,22 @@ interface CardPreviewProps {
   activeFrame: number;
   setActiveFrame: React.Dispatch<React.SetStateAction<number>>;
   textColor: string;
-  textStyle: "handwritten" | "cursive" | "modern" | "classic";
+  textStyle: TextStyle;
   message: string;
   error: string;
   touch: boolean;
 
   onOverlayPointerDown: (
     frameIndex: number,
-    e: React.PointerEvent<HTMLDivElement>
+    e: React.PointerEvent<HTMLDivElement>,
   ) => void;
   onOverlayPointerMove: (
     frameIndex: number,
-    e: React.PointerEvent<HTMLDivElement>
+    e: React.PointerEvent<HTMLDivElement>,
   ) => void;
   onOverlayPointerUp: (
     frameIndex: number,
-    e: React.PointerEvent<HTMLDivElement>
+    e: React.PointerEvent<HTMLDivElement>,
   ) => void;
 
   removePhoto: (frameIndex: number) => void;
@@ -41,6 +416,12 @@ interface CardPreviewProps {
   activeStickerId: string | null;
   setActiveStickerId: (id: string | null) => void;
   setStickers: React.Dispatch<React.SetStateAction<StickerLayer[]>>;
+
+  // Text layers
+  textLayers: TextLayer[];
+  activeTextId: string | null;
+  setActiveTextId: (id: string | null) => void;
+  setTextLayers: React.Dispatch<React.SetStateAction<TextLayer[]>>;
 }
 
 export default function CardPreview({
@@ -63,6 +444,12 @@ export default function CardPreview({
   activeStickerId,
   setActiveStickerId,
   setStickers,
+
+  // Text layers
+  textLayers,
+  activeTextId,
+  setActiveTextId,
+  setTextLayers,
 }: CardPreviewProps) {
   // ----- Frame Styles (for click/drag overlay) -----
   const frameStyles = useMemo(() => {
@@ -84,7 +471,7 @@ export default function CardPreview({
         <div className="rounded-[28px] bg-white/70 border border-white shadow-xl shadow-pink-200/40 p-4">
           <div
             ref={cardRef}
-            className="w-[320px] aspect-[9/16] rounded-[22px] overflow-hidden relative bg-[#111]"
+            className="w-[320px] aspect-[9/16] rounded-[22px] overflow-visible relative bg-[#111] isolate"
             style={{ width: "100%" }}
           >
             <img
@@ -94,76 +481,27 @@ export default function CardPreview({
               draggable={false}
             />
 
-            {/*  Stickers layer (above background, below photos/text) */}
-            {stickers
-              .slice()
-              .sort((a, b) => a.z - b.z)
-              .map((s) => {
-                const selected = s.id === activeStickerId;
+            {/* Stickers container */}
+            <div className="absolute inset-0 overflow-visible">
+              {/*  Stickers layer (above background, below photos/text) */}
+              {stickers
+                .slice()
+                .sort((a, b) => a.z - b.z)
+                .map((s) => {
+                  const selected = s.id === activeStickerId;
 
-                return (
-                  <div
-                    key={s.id}
-                    className="absolute left-1/2 top-1/2 touch-none z-40"
-                    style={{
-                      transform: `translate(calc(-50% + ${s.x}px), calc(-50% + ${s.y}px)) rotate(${s.rotate}deg) scale(${s.scale})`,
-                      transformOrigin: "center",
-                      touchAction: "none",
-                    }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      (e.currentTarget as HTMLElement).setPointerCapture(
-                        e.pointerId
-                      );
-
-                      setActiveStickerId(s.id);
-
-                      const startX = e.clientX;
-                      const startY = e.clientY;
-                      const ox = s.x;
-                      const oy = s.y;
-
-                      const onMove = (ev: PointerEvent) => {
-                        const rect = cardRef.current?.getBoundingClientRect();
-                        if (!rect) return;
-
-                        const dxPx = ev.clientX - startX;
-                        const dyPx = ev.clientY - startY;
-
-                        // convert screen pixels -> template units
-                        const dx = dxPx * (1080 / rect.width);
-                        const dy = dyPx * (1920 / rect.height);
-
-                        setStickers((prev) =>
-                          prev.map((st) =>
-                            st.id === s.id
-                              ? { ...st, x: ox + dx, y: oy + dy }
-                              : st
-                          )
-                        );
-                      };
-
-                      const onUp = () => {
-                        window.removeEventListener("pointermove", onMove);
-                        window.removeEventListener("pointerup", onUp);
-                      };
-
-                      window.addEventListener("pointermove", onMove);
-                      window.addEventListener("pointerup", onUp);
-                    }}
-                  >
-                    <img
-                      src={s.src}
-                      alt={s.stickerId}
-                      draggable={false}
-                      className={[
-                        "w-[110px] h-auto select-none",
-                        selected ? "ring-2 ring-pink-400 rounded-2xl" : "",
-                      ].join(" ")}
+                  return (
+                    <StickerElement
+                      key={s.id}
+                      sticker={s}
+                      selected={selected}
+                      cardRef={cardRef}
+                      setActiveStickerId={setActiveStickerId}
+                      setStickers={setStickers}
                     />
-                  </div>
-                );
-              })}
+                  );
+                })}
+            </div>
 
             {/* Multi-photo masked preview */}
             <svg
@@ -259,19 +597,24 @@ export default function CardPreview({
               );
             })}
 
-            {/* Message */}
-            <div
-              className={[
-                "absolute left-4 right-4 bottom-7 text-center font-extrabold",
-                fontClass[textStyle],
-              ].join(" ")}
-              style={{
-                textShadow: "0 2px 12px rgba(0,0,0,0.55)",
-                pointerEvents: "none",
-                color: textColor,
-              }}
-            >
-              <div className="text-[16px]">{message}</div>
+            {/* Text layers container */}
+            <div className="absolute inset-0 overflow-visible pointer-events-none z-30">
+              {textLayers
+                .slice()
+                .sort((a, b) => a.z - b.z)
+                .map((t) => {
+                  const selected = t.id === activeTextId;
+                  return (
+                    <TextElement
+                      key={t.id}
+                      text={t}
+                      selected={selected}
+                      cardRef={cardRef}
+                      setActiveTextId={setActiveTextId}
+                      setTextLayers={setTextLayers}
+                    />
+                  );
+                })}
             </div>
 
             {/* Right-side mini tools (optional) */}
@@ -282,7 +625,7 @@ export default function CardPreview({
                   className="w-12 h-12 rounded-2xl bg-white/75 border border-white shadow-sm flex items-center justify-center active:scale-95 transition"
                   onClick={() =>
                     setActiveFrame((x: number) =>
-                      Math.max(0, Math.min(x - 1, tpl.frames.length - 1))
+                      Math.max(0, Math.min(x - 1, tpl.frames.length - 1)),
                     )
                   }
                   aria-label="Previous frame"
@@ -294,7 +637,7 @@ export default function CardPreview({
                   className="w-12 h-12 rounded-2xl bg-white/75 border border-white shadow-sm flex items-center justify-center active:scale-95 transition"
                   onClick={() =>
                     setActiveFrame((x: number) =>
-                      Math.max(0, Math.min(x + 1, tpl.frames.length - 1))
+                      Math.max(0, Math.min(x + 1, tpl.frames.length - 1)),
                     )
                   }
                   aria-label="Next frame"

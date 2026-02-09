@@ -21,7 +21,21 @@ export type PhotoState = {
   ih: number;
 };
 
-export type TabId = "layout" | "photos" | "text" | "decor" | "theme";
+export type TabId = "layout" | "photos" | "text" | "decor" | "settings";
+
+export type TextStyle = "handwritten" | "modern" | "classic" | "elegant";
+
+export type TextLayer = {
+  id: string;
+  content: string;
+  style: TextStyle;
+  color: string;
+  x: number; // px relative to card center
+  y: number;
+  scale: number;
+  rotate: number;
+  z: number;
+};
 
 export type StickerLayer = {
   id: string; // unique instance id

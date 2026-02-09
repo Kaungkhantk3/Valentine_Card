@@ -1,0 +1,31 @@
+/\*\*
+
+- PERFORMANCE & ARCHITECTURE RULES (IMPORTANT)
+-
+- This is an image-heavy, canvas-based Valentine Card editor.
+- Lighthouse performance is a concern (current score ~56).
+-
+- Rules for any code you generate:
+- 1.  Do NOT eagerly load heavy features (canvas, editor logic, unlock animations).
+- - Use lazy loading, conditional rendering, or dynamic import.
+-
+- 2.  Preview assets (videos / animated webp / gifs) MUST be loaded
+- only when the manual modal or preview is opened.
+-
+- 3.  Avoid expensive work during initial render.
+- - No canvas initialization on page load.
+- - No heavy loops in useEffect without guards.
+-
+- 4.  For interactions (drag, hold, scratch):
+- - Do NOT call setState on every pointer move.
+- - Use requestAnimationFrame or refs where possible.
+-
+- 5.  Optimize images:
+- - Prefer WebP
+- - Max display size ~1080px
+- - Main visual = LCP, load it first.
+-
+- 6.  Mobile Safari is the primary target.
+-
+- Generate code that follows these rules.
+  \*/
