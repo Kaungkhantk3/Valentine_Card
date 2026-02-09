@@ -175,10 +175,10 @@ export default function SettingsTab({
                 />
               </div>
               <div className="text-xs font-semibold text-slate-700">
-                Break Heart Lock
+                Unlock Heart Lock
               </div>
               <div className="text-[10px] text-slate-500">
-                Tap 5 times to break
+                Drag the key to unlock
               </div>
             </div>
           </button>

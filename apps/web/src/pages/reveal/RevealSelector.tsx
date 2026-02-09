@@ -113,17 +113,17 @@ export default function RevealSelector({ onSelect }: RevealSelectorProps) {
             </div>
 
             <h3 className="text-2xl font-bold text-red-600 mb-2">
-              Break the Heart Lock
+              Unlock the Heart Lock
             </h3>
 
             <p className="text-slate-600 text-sm mb-4">
-              Tap 5 times to break the lock and reveal
+              Drag the key to the heart and reveal
             </p>
 
             <div className="flex gap-2 mt-2 items-center">
               <Heart className="w-6 h-6 text-red-500 fill-red-500" />
               <Lock className="w-5 h-5 text-red-400" />
-              <span className="text-xl">💔</span>
+              <span className="text-xl">❤️</span>
             </div>
           </div>
 

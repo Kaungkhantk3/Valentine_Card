@@ -159,7 +159,6 @@ app.post("/cards", async (req, res) => {
   }
 
   const data = parsed.data;
-  console.log("Creating card with revealType:", data.revealType);
 
   // Sanitize text inputs to prevent XSS
   const sanitizedMessage = (data.message ?? "").replace(/[<>"']/g, "");

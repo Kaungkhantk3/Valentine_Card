@@ -127,7 +127,6 @@ export default function ReceiverPage() {
         const res = await fetch(`${API}/cards/${slug}`);
         const json = await res.json();
         if (res.ok) {
-          console.log("Fetched card data:", json);
           setCard(json);
           setCardFetched(true);
 

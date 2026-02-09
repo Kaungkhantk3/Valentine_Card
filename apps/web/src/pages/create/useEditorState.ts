@@ -35,7 +35,7 @@ export function useEditorState() {
 
   // ----- Editor State -----
   const [tab, setTab] = useState<TabId>("layout");
-  const [message, setMessage] = useState("Heppy Valentine's Day!");
+  const [message, setMessage] = useState("Happy Valentine's Day!");
   const [loading, setLoading] = useState(false);
   const [panelSnap, setPanelSnap] = useState<PanelSnap>("half");
   const [error, setError] = useState("");
