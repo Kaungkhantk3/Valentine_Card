@@ -52,6 +52,40 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
+app.post("/upload-card-image", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ error: "Only images allowed" });
+    }
+
+    // Optional editToken validation for MVP-safe approach
+    // If token provided, validate it exists in DB (basic ownership check)
+    const editToken =
+      req.body.editToken || req.headers.authorization?.replace("Bearer ", "");
+    if (editToken) {
+      const card = await prisma.card.findUnique({ where: { editToken } });
+      if (!card) {
+        return res.status(401).json({ error: "Invalid or missing edit token" });
+      }
+      // Token valid - proceed with upload
+    }
+
+    const objectName = `cards/${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}.png`;
+
+    await minio.putObject(BUCKET, objectName, req.file.buffer, req.file.size, {
+      "Content-Type": "image/png",
+    });
+
+    const url = `${PUBLIC_BASE}/${BUCKET}/${objectName}`;
+    res.json({ url });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? "Upload failed" });
+  }
+});
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
@@ -78,24 +112,44 @@ const StickerInputSchema = z.object({
   rotate: z.number().optional(),
   z: z.number().int().optional(),
 });
+const TextLayerInputSchema = z.object({
+  content: z.string().min(1).max(200),
+  color: z.string().min(1).max(32),
+  style: z.enum(["handwritten", "cursive", "modern", "classic", "elegant"]),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  scale: z.number().optional(),
+  rotate: z.number().optional(),
+  z: z.number().int().optional(),
+});
 
 const CreateCardSchema = z.object({
   templateId: z.string().min(1).max(50),
   message: z.string().min(1).max(120),
   textColor: z.string().min(1).max(32).optional(),
-  textStyle: z.enum(["handwritten", "cursive", "modern", "classic"]).optional(),
+  textStyle: z
+    .enum(["handwritten", "cursive", "modern", "classic", "elegant"])
+    .optional(),
   photoUrl: z.string().min(1).optional(),
   photoX: z.number().optional(),
   photoY: z.number().optional(),
   photoScale: z.number().optional(),
   photoRotate: z.number().optional(),
   shape: z.string().optional(),
+  revealType: z
+    .enum(["findHeart", "bringTogether", "scratchCard", "breakHeart"])
+    .optional(),
   photos: z.array(PhotoInputSchema).optional(),
   stickers: z.array(StickerInputSchema).optional(),
+  textLayers: z.array(TextLayerInputSchema).optional(),
 });
 
 function makeSlug() {
   return crypto.randomBytes(6).toString("base64url");
+}
+
+function makeEditToken() {
+  return crypto.randomBytes(64).toString("hex"); // 128 char hex string
 }
 
 app.post("/cards", async (req, res) => {
@@ -105,6 +159,10 @@ app.post("/cards", async (req, res) => {
   }
 
   const data = parsed.data;
+  console.log("Creating card with revealType:", data.revealType);
+
+  // Sanitize text inputs to prevent XSS
+  const sanitizedMessage = data.message?.replace(/[<>"']/g, "");
 
   const incomingPhotos = (data.photos ?? [])
     .slice()
@@ -112,6 +170,9 @@ app.post("/cards", async (req, res) => {
   const incomingStickers = (data.stickers ?? [])
     .slice()
     .map((s, idx) => ({ ...s, z: s.z ?? idx }));
+  const incomingTextLayers = (data.textLayers ?? [])
+    .slice()
+    .map((t, idx) => ({ ...t, z: t.z ?? idx }));
 
   // keep photo required (your decision)
   const hasMulti = incomingPhotos.length > 0;
@@ -121,12 +182,14 @@ app.post("/cards", async (req, res) => {
     return res.status(400).json({ error: "Photo required" });
   }
 
-  // ensure unique slug
+  // ensure unique slug and editToken
   let slug = makeSlug();
+  let editToken = makeEditToken();
   for (let i = 0; i < 5; i++) {
     const exists = await prisma.card.findUnique({ where: { slug } });
     if (!exists) break;
     slug = makeSlug();
+    editToken = makeEditToken();
   }
 
   // normalize legacy defaults from first photo if multi present
@@ -146,10 +209,12 @@ app.post("/cards", async (req, res) => {
 
   const createData: Parameters<typeof prisma.card.create>[0]["data"] = {
     slug,
+    editToken,
     templateId: data.templateId,
-    message: data.message,
+    message: sanitizedMessage,
     textColor: data.textColor ?? "#FFFFFF",
     textStyle: data.textStyle ?? "modern",
+    revealType: data.revealType ?? null,
 
     // legacy
     photoUrl: legacyPhotoUrl,
@@ -197,9 +262,24 @@ app.post("/cards", async (req, res) => {
     };
   }
 
+  if (incomingTextLayers.length > 0) {
+    (createData as any).textLayers = {
+      create: incomingTextLayers.map((t) => ({
+        content: t.content,
+        color: t.color,
+        style: t.style,
+        x: t.x ?? 0,
+        y: t.y ?? 0,
+        scale: t.scale ?? 1,
+        rotate: t.rotate ?? 0,
+        z: t.z ?? 0,
+      })),
+    };
+  }
+
   const card = await prisma.card.create({
     data: createData,
-    select: { slug: true },
+    select: { slug: true, editToken: true },
   });
 
   res.status(201).json(card);
@@ -213,6 +293,7 @@ app.get("/cards/:slug", async (req, res) => {
     include: {
       photos: true,
       stickers: true,
+      textLayers: true,
     },
   });
 

@@ -4,15 +4,16 @@ import {
   Image as ImageIcon,
   Type as TypeIcon,
   Sparkles,
-  Palette,
+  Settings,
 } from "lucide-react";
 
-import type { TabId, PanelSnap } from "../types";
+import type { TabId, PanelSnap, TextStyle } from "../types";
+import type { RevealType } from "../../reveal/types";
 import LayoutTab from "../tabs/LayoutTab";
 import PhotosTab from "../tabs/PhotosTab";
 import TextTab from "../tabs/TextTab";
 import DecorTab from "../tabs/DecorTab";
-import ThemeTab from "../tabs/ThemeTab";
+import SettingsTab from "../tabs/SettingsTab";
 
 interface TabButtonProps {
   label: string;
@@ -76,10 +77,8 @@ interface BottomPanelProps {
   setMessage: (message: string) => void;
   textColor: string;
   setTextColor: (color: string) => void;
-  textStyle: "handwritten" | "cursive" | "modern" | "classic";
-  setTextStyle: (
-    style: "handwritten" | "cursive" | "modern" | "classic"
-  ) => void;
+  textStyle: TextStyle;
+  setTextStyle: (style: TextStyle) => void;
 
   //  Sticker state/actions
   stickers: any[];
@@ -87,6 +86,10 @@ interface BottomPanelProps {
   addSticker: (def: { id: string; src: string }) => void;
   removeSticker: (id: string) => void;
   updateActiveSticker: (patch: any) => void;
+
+  // Reveal Type
+  revealType?: RevealType;
+  setRevealType: (type: RevealType | undefined) => void;
 }
 
 export default function BottomPanel({
@@ -119,14 +122,17 @@ export default function BottomPanel({
   addSticker,
   removeSticker,
   updateActiveSticker,
+
+  revealType,
+  setRevealType,
 }: BottomPanelProps) {
   // Better heights for mobile + keyboard
   const snapClass =
     panelSnap === "collapsed"
       ? "h-[92px]"
       : panelSnap === "half"
-      ? "h-[45vh] max-h-[420px]"
-      : "h-[70vh] max-h-[720px]";
+        ? "h-[45vh] max-h-[420px]"
+        : "h-[70vh] max-h-[720px]";
 
   function toggleCollapse() {
     setPanelSnap(panelSnap === "collapsed" ? "half" : "collapsed");
@@ -215,7 +221,13 @@ export default function BottomPanel({
                   setPanelSnap={setPanelSnap}
                 />
               )}
-              {tab === "theme" && <ThemeTab />}
+
+              {tab === "settings" && (
+                <SettingsTab
+                  revealType={revealType}
+                  setRevealType={setRevealType}
+                />
+              )}
             </div>
           )}
 
@@ -247,10 +259,10 @@ export default function BottomPanel({
                 onClick={() => openTab("decor")}
               />
               <TabButton
-                label="Theme"
-                icon={<Palette className="w-5 h-5" />}
-                active={tab === "theme"}
-                onClick={() => openTab("theme")}
+                label="Settings"
+                icon={<Settings className="w-5 h-5" />}
+                active={tab === "settings"}
+                onClick={() => openTab("settings")}
               />
             </div>
           </div>

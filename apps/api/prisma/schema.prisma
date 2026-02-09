@@ -16,6 +16,7 @@ datasource db {
 model Card {
   id         Int      @id @default(autoincrement())
   slug       String   @unique @db.VarChar(32)
+  editToken  String?  @unique @db.VarChar(128)
   templateId String   @db.VarChar(50)
   photoUrl   String   @db.Text
   message    String   @db.VarChar(120)
@@ -25,12 +26,15 @@ model Card {
   photoY     Float    @default(0)
   photoScale Float    @default(1)
   photoRotate Float   @default(0)
+  revealType String?  @db.VarChar(32)
   createdAt  DateTime @default(now())
   shape      String   @default("heart") @db.VarChar(16)
   photos     CardPhoto[]
   stickers   CardSticker[]
+  textLayers CardTextLayer[]
 
   @@index([createdAt])
+  @@index([editToken])
 }
 
 model CardPhoto {
@@ -63,6 +67,26 @@ model CardSticker {
   src       String   @db.VarChar(255)  // e.g. "/stickers/cupid.png"
 
   // stored in 1080x1920 units, relative to center (same as your CardPreview approach)
+  x         Float    @default(0)
+  y         Float    @default(0)
+  scale     Float    @default(1)
+  rotate    Float    @default(0)
+  z         Int      @default(0)
+
+  @@index([cardId])
+}
+
+model CardTextLayer {
+  id        Int      @id @default(autoincrement())
+
+  cardId    Int
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  content   String   @db.VarChar(200)
+  color     String   @db.VarChar(32)   @default("#FFFFFF")
+  style     String   @db.VarChar(32)   @default("modern")
+  
+  // stored in 1080x1920 units, relative to center
   x         Float    @default(0)
   y         Float    @default(0)
   scale     Float    @default(1)

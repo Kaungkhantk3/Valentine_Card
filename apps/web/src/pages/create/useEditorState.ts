@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { templates } from "./templates";
-import type { PhotoState, TabId, PanelSnap, StickerLayer } from "./types";
+import type {
+  PhotoState,
+  TabId,
+  PanelSnap,
+  StickerLayer,
+  TextStyle,
+  TextLayer,
+} from "./types";
+import type { RevealType } from "../reveal/types";
 import { MAX_PHOTOS } from "./constants";
 import { uploadOne, createCard } from "./api";
 import { cleanupPreviewUrl } from "./photo";
@@ -16,7 +24,7 @@ export function useEditorState() {
   }, []);
 
   const [templateId, setTemplateId] = useState<string>(
-    () => templateList[0]?.id ?? "t1"
+    () => templateList[0]?.id ?? "t1",
   );
 
   const tpl = useMemo(() => {
@@ -41,19 +49,47 @@ export function useEditorState() {
 
   // ----- UI-only Text Settings (for now) -----
   const [textColor, setTextColor] = useState<string>("#FF3B8E");
-  const [textStyle, setTextStyle] = useState<
-    "handwritten" | "cursive" | "modern" | "classic"
-  >("modern");
+  const [textStyle, setTextStyle] = useState<TextStyle>("modern");
+  const [textLayers, setTextLayers] = useState<TextLayer[]>([
+    {
+      id: "msg_main",
+      content: "Hello Valentine",
+      style: "modern",
+      color: "#FF3B8E",
+      x: 0,
+      y: 0,
+      scale: 1,
+      rotate: 0,
+      z: 0,
+    },
+  ]);
+  const [activeTextId, setActiveTextId] = useState<string | null>("msg_main");
 
   const [stickers, setStickers] = useState<StickerLayer[]>([]);
   const [activeStickerId, setActiveStickerId] = useState<string | null>(null);
+
+  // ----- Reveal Type -----
+  const [revealType, setRevealType] = useState<RevealType | undefined>(
+    undefined,
+  );
+
+  // Sync message with textLayers
+  useEffect(() => {
+    setTextLayers((prev) =>
+      prev.map((t) =>
+        t.id === "msg_main"
+          ? { ...t, content: message, color: textColor, style: textStyle }
+          : t,
+      ),
+    );
+  }, [message, textColor, textStyle]);
 
   // ----- Cleanup -----
   useEffect(() => {
     return () => {
       // cleanup all preview URLs on unmount
       Object.values(photosByFrame).forEach((p) =>
-        cleanupPreviewUrl(p.previewUrl)
+        cleanupPreviewUrl(p.previewUrl),
       );
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,7 +122,7 @@ export function useEditorState() {
           rotate: p.rotate,
           shape: p.shape,
           fit: p.fit,
-        }))
+        })),
       );
 
       const data = await createCard(
@@ -95,8 +131,16 @@ export function useEditorState() {
         textColor,
         textStyle,
         uploaded,
-        stickers
+        stickers.map(({ id, ...rest }) => rest),
+        textLayers.map(({ id, ...rest }) => rest),
+        revealType,
       );
+
+      // Store editToken in localStorage for future edits
+      if (data.editToken) {
+        localStorage.setItem(`card_${data.slug}_editToken`, data.editToken);
+      }
+
       nav(`/c/${data.slug}`);
     } catch (e: any) {
       setError(e?.message ?? "Something went wrong");
@@ -129,7 +173,39 @@ export function useEditorState() {
 
   function updateActiveSticker(patch: Partial<StickerLayer>) {
     setStickers((prev) =>
-      prev.map((s) => (s.id === activeStickerId ? { ...s, ...patch } : s))
+      prev.map((s) => (s.id === activeStickerId ? { ...s, ...patch } : s)),
+    );
+  }
+
+  function addText() {
+    if (textLayers.length >= 5) return; // max 5 text layers
+    const id = `txt_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    setTextLayers((prev) => [
+      ...prev,
+      {
+        id,
+        content: "New Text",
+        style: textStyle,
+        color: textColor,
+        x: 0,
+        y: -170 - textLayers.length * 135, // stack them vertically in 1080px space
+        scale: 1,
+        rotate: 0,
+        z: prev.length,
+      },
+    ]);
+    setActiveTextId(id);
+  }
+
+  function removeText(id: string) {
+    if (id === "msg_main") return; // can't remove main message
+    setTextLayers((prev) => prev.filter((t) => t.id !== id));
+    setActiveTextId((cur) => (cur === id ? null : cur));
+  }
+
+  function updateActiveText(patch: Partial<TextLayer>) {
+    setTextLayers((prev) =>
+      prev.map((t) => (t.id === activeTextId ? { ...t, ...patch } : t)),
     );
   }
 
@@ -172,6 +248,17 @@ export function useEditorState() {
     setTextColor,
     textStyle,
     setTextStyle,
+    textLayers,
+    setTextLayers,
+    activeTextId,
+    setActiveTextId,
+    addText,
+    removeText,
+    updateActiveText,
+
+    // Reveal Type
+    revealType,
+    setRevealType,
 
     // Actions
     handleCreate,

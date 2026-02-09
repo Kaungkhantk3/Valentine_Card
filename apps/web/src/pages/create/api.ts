@@ -1,4 +1,5 @@
 import { API } from "./constants";
+import type { TextStyle } from "./types";
 
 export async function uploadOne(file: File): Promise<string> {
   const form = new FormData();
@@ -15,10 +16,12 @@ export async function createCard(
   templateId: string,
   message: string,
   textColor: string,
-  textStyle: "handwritten" | "cursive" | "modern" | "classic",
+  textStyle: TextStyle,
   photos: any[],
-  stickers: any[]
-): Promise<{ slug: string }> {
+  stickers: any[],
+  textLayers: any[],
+  revealType?: string,
+): Promise<{ slug: string; editToken?: string }> {
   const res = await fetch(`${API}/cards`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -29,6 +32,8 @@ export async function createCard(
       textStyle,
       photos,
       stickers,
+      textLayers,
+      revealType,
     }),
   });
 

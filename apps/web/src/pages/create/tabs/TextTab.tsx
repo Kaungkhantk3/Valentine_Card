@@ -1,8 +1,8 @@
-import type { PanelSnap } from "../types";
+import type { PanelSnap, TextStyle } from "../types";
 
 const fontClass = {
   handwritten: "font-handwritten",
-  cursive: "font-cursive",
+  elegant: "font-cursive",
   modern: "font-modern",
   classic: "font-classic",
 } as const;
@@ -12,10 +12,8 @@ interface TextTabProps {
   setMessage: (message: string) => void;
   textColor: string;
   setTextColor: (color: string) => void;
-  textStyle: "handwritten" | "cursive" | "modern" | "classic";
-  setTextStyle: (
-    style: "handwritten" | "cursive" | "modern" | "classic"
-  ) => void;
+  textStyle: TextStyle;
+  setTextStyle: (style: TextStyle) => void;
   setPanelSnap: (snap: PanelSnap) => void;
 }
 
@@ -69,7 +67,7 @@ export default function TextTab({
       <div className="mt-4 grid grid-cols-2 gap-3">
         {[
           { id: "handwritten", label: "Handwritten" },
-          { id: "cursive", label: "Cursive" },
+          { id: "elegant", label: "Elegant" },
           { id: "modern", label: "Modern" },
           { id: "classic", label: "Classic" },
         ].map((s) => {
