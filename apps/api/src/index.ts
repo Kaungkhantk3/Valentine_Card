@@ -432,7 +432,149 @@ app.get("/cards/:slug", async (req, res) => {
   res.json(card);
 });
 
+// ============================================
+// GLOBAL ERROR HANDLER - Must be LAST middleware
+// ============================================
+
+// 404 handler - for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Not found",
+    message: `Route ${req.method} ${req.path} not found`,
+    statusCode: 404,
+  });
+});
+
+// Global error handler - catches all errors
+app.use(
+  (
+    err: any,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    // Log error for debugging (in production, use proper logging)
+    console.error("Error:", err);
+
+    // Multer file upload errors
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        error: "File too large",
+        message: "The uploaded file exceeds the maximum allowed size of 10MB",
+        statusCode: 413,
+      });
+    }
+
+    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      return res.status(400).json({
+        error: "Invalid upload",
+        message: "Unexpected file field or too many files",
+        statusCode: 400,
+      });
+    }
+
+    // Prisma errors
+    if (err.code === "P2002") {
+      return res.status(409).json({
+        error: "Conflict",
+        message: "A record with this value already exists",
+        statusCode: 409,
+      });
+    }
+
+    if (err.code?.startsWith("P2")) {
+      return res.status(400).json({
+        error: "Database error",
+        message: "Invalid request or data constraint violation",
+        statusCode: 400,
+      });
+    }
+
+    // Zod validation errors
+    if (err.name === "ZodError") {
+      return res.status(400).json({
+        error: "Validation error",
+        message: "Invalid request data",
+        details: err.errors,
+        statusCode: 400,
+      });
+    }
+
+    // JSON parsing errors
+    if (err.type === "entity.parse.failed") {
+      return res.status(400).json({
+        error: "Invalid JSON",
+        message: "Request body contains invalid JSON",
+        statusCode: 400,
+      });
+    }
+
+    // Payload too large
+    if (err.type === "entity.too.large") {
+      return res.status(413).json({
+        error: "Payload too large",
+        message: "Request body exceeds the maximum allowed size of 2MB",
+        statusCode: 413,
+      });
+    }
+
+    // Default error response - don't expose internal details in production
+    const statusCode = err.statusCode || err.status || 500;
+    const message =
+      process.env.NODE_ENV === "production"
+        ? "An unexpected error occurred"
+        : err.message || "Internal server error";
+
+    res.status(statusCode).json({
+      error: err.name || "InternalServerError",
+      message,
+      statusCode,
+      ...(process.env.NODE_ENV !== "production" && { stack: err.stack }),
+    });
+  },
+);
+
+// ============================================
+// GRACEFUL SHUTDOWN & UNHANDLED ERRORS
+// ============================================
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // In production, you might want to log this to an external service
+});
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error: Error) => {
+  console.error("Uncaught Exception:", error);
+  // Gracefully shutdown
+  process.exit(1);
+});
+
+// Graceful shutdown on SIGTERM/SIGINT
+const gracefulShutdown = async (signal: string) => {
+  console.log(`\n${signal} received, starting graceful shutdown...`);
+
+  // Stop accepting new connections
+  server.close(() => {
+    console.log("HTTP server closed");
+  });
+
+  // Close database connections
+  await prisma.$disconnect();
+  console.log("Database connections closed");
+
+  process.exit(0);
+};
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// ============================================
+// START SERVER
+// ============================================
+
 const PORT = Number(process.env.PORT || 4000);
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`API running on http://localhost:${PORT}`);
 });
