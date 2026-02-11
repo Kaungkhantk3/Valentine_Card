@@ -6,16 +6,99 @@ import { z } from "zod";
 import crypto from "crypto";
 import multer from "multer";
 import { Client as MinioClient } from "minio";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
 
+// CORS configuration
 app.use(cors());
+
+// JSON payload limit - 2MB max for request bodies
 app.use(express.json({ limit: "2mb" }));
 
-const upload = multer({ storage: multer.memoryStorage() });
+// URL-encoded payload limit
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+
+// ============================================
+// RATE LIMITING - Abuse Prevention
+// ============================================
+
+// General API rate limit: 100 requests per 15 minutes per IP
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: "Too many requests, please try again later." },
+  standardHeaders: true, // Return rate limit info in headers
+  legacyHeaders: false,
+});
+
+// Strict rate limit for uploads: 10 uploads per 15 minutes per IP
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 uploads per windowMs
+  message: { error: "Too many uploads, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Card creation rate limit: 5 cards per 15 minutes per IP
+const createCardLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 card creations per windowMs
+  message: { error: "Too many cards created, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limiter to all routes
+app.use(generalLimiter);
+
+// ============================================
+// FILE UPLOAD CONFIGURATION - Size & Type Limits
+// ============================================
+
+// File size limits and validation
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB max file size
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
+
+// Multer configuration with strict limits
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_FILE_SIZE, // 10MB max
+    files: 1, // Only 1 file per request
+    fields: 10, // Max 10 fields in multipart form
+    fieldSize: 1024 * 1024, // 1MB max per field
+  },
+  fileFilter: (req, file, cb) => {
+    // Validate MIME type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+      return cb(
+        new Error(
+          `Invalid file type. Allowed: ${ALLOWED_IMAGE_TYPES.join(", ")}`,
+        ),
+      );
+    }
+
+    // Validate file extension
+    const ext = file.originalname.split(".").pop()?.toLowerCase();
+    const allowedExts = ["jpg", "jpeg", "png", "webp", "gif"];
+    if (!ext || !allowedExts.includes(ext)) {
+      return cb(new Error("Invalid file extension"));
+    }
+
+    cb(null, true);
+  },
+});
 
 const minio = new MinioClient({
   endPoint: process.env.MINIO_ENDPOINT || "localhost",
@@ -29,13 +112,29 @@ const BUCKET = process.env.MINIO_BUCKET || "vday";
 const PUBLIC_BASE =
   process.env.MINIO_PUBLIC_BASE_URL || "http://localhost:9000";
 
-app.post("/upload", upload.single("file"), async (req, res) => {
+// ============================================
+// UPLOAD ENDPOINTS - With Rate Limiting & Validation
+// ============================================
+
+// Helper function to validate file size (additional check beyond multer)
+function validateFileSize(file: Express.Multer.File): boolean {
+  return file.size > 0 && file.size <= MAX_FILE_SIZE;
+}
+
+app.post("/upload", uploadLimiter, upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    if (!req.file.mimetype.startsWith("image/")) {
-      return res.status(400).json({ error: "Only images allowed" });
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
     }
 
+    // Additional file size validation
+    if (!validateFileSize(req.file)) {
+      return res.status(400).json({
+        error: `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+      });
+    }
+
+    // MIME type already validated by multer fileFilter
     const ext = req.file.originalname.split(".").pop() || "jpg";
     const objectName = `photos/${Date.now()}-${Math.random()
       .toString(16)
@@ -48,43 +147,80 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const url = `${PUBLIC_BASE}/${BUCKET}/${objectName}`;
     res.json({ url });
   } catch (e: any) {
+    // Handle multer errors
+    if (e.message?.includes("File too large")) {
+      return res.status(413).json({
+        error: `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+      });
+    }
+    if (e.message?.includes("Invalid file")) {
+      return res.status(400).json({ error: e.message });
+    }
     res.status(500).json({ error: e?.message ?? "Upload failed" });
   }
 });
 
-app.post("/upload-card-image", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    if (!req.file.mimetype.startsWith("image/")) {
-      return res.status(400).json({ error: "Only images allowed" });
-    }
-
-    // Optional editToken validation for MVP-safe approach
-    // If token provided, validate it exists in DB (basic ownership check)
-    const editToken =
-      req.body.editToken || req.headers.authorization?.replace("Bearer ", "");
-    if (editToken) {
-      const card = await prisma.card.findUnique({ where: { editToken } });
-      if (!card) {
-        return res.status(401).json({ error: "Invalid or missing edit token" });
+app.post(
+  "/upload-card-image",
+  uploadLimiter,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
       }
-      // Token valid - proceed with upload
+
+      // Additional file size validation
+      if (!validateFileSize(req.file)) {
+        return res.status(400).json({
+          error: `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        });
+      }
+
+      // Optional editToken validation for MVP-safe approach
+      // If token provided, validate it exists in DB (basic ownership check)
+      const editToken =
+        req.body.editToken || req.headers.authorization?.replace("Bearer ", "");
+      if (editToken) {
+        const card = await prisma.card.findUnique({ where: { editToken } });
+        if (!card) {
+          return res
+            .status(401)
+            .json({ error: "Invalid or missing edit token" });
+        }
+        // Token valid - proceed with upload
+      }
+
+      const objectName = `cards/${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}.png`;
+
+      await minio.putObject(
+        BUCKET,
+        objectName,
+        req.file.buffer,
+        req.file.size,
+        {
+          "Content-Type": "image/png",
+        },
+      );
+
+      const url = `${PUBLIC_BASE}/${BUCKET}/${objectName}`;
+      res.json({ url });
+    } catch (e: any) {
+      // Handle multer errors
+      if (e.message?.includes("File too large")) {
+        return res.status(413).json({
+          error: `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        });
+      }
+      if (e.message?.includes("Invalid file")) {
+        return res.status(400).json({ error: e.message });
+      }
+      res.status(500).json({ error: e?.message ?? "Upload failed" });
     }
-
-    const objectName = `cards/${Date.now()}-${Math.random()
-      .toString(16)
-      .slice(2)}.png`;
-
-    await minio.putObject(BUCKET, objectName, req.file.buffer, req.file.size, {
-      "Content-Type": "image/png",
-    });
-
-    const url = `${PUBLIC_BASE}/${BUCKET}/${objectName}`;
-    res.json({ url });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? "Upload failed" });
-  }
-});
+  },
+);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
@@ -139,9 +275,9 @@ const CreateCardSchema = z.object({
   revealType: z
     .enum(["findHeart", "bringTogether", "scratchCard", "breakHeart"])
     .optional(),
-  photos: z.array(PhotoInputSchema).optional(),
-  stickers: z.array(StickerInputSchema).optional(),
-  textLayers: z.array(TextLayerInputSchema).optional(),
+  photos: z.array(PhotoInputSchema).max(10).optional(), // Max 10 photos
+  stickers: z.array(StickerInputSchema).max(20).optional(), // Max 20 stickers
+  textLayers: z.array(TextLayerInputSchema).max(10).optional(), // Max 10 text layers
 });
 
 function makeSlug() {
@@ -152,7 +288,7 @@ function makeEditToken() {
   return crypto.randomBytes(64).toString("hex"); // 128 char hex string
 }
 
-app.post("/cards", async (req, res) => {
+app.post("/cards", createCardLimiter, async (req, res) => {
   const parsed = CreateCardSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
