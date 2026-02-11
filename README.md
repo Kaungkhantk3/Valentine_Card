@@ -1,93 +1,253 @@
-# valentine-card
+# 💝 Valentine Card
 
+A modern, interactive digital Valentine's Day card creator with customizable photos, stickers, text layers, and engaging unlock animations.
 
+## ✨ Features
 
-## Getting started
+### Card Creation
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- **Multiple Templates**: Choose from 8+ beautiful card templates with different layouts
+- **Photo Upload & Editing**: Add up to 5 photos with advanced editing capabilities
+  - Multiple shape options (circle, heart, star, hexagon, etc.)
+  - Position, scale, and rotate controls
+  - Object-fit options (cover/contain)
+- **Stickers & Decorations**: Add romantic stickers and decorative elements
+- **Text Layers**: Add customizable text with various fonts, colors, and styles
+- **Background Customization**: Choose from pre-designed backgrounds
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+### Interactive Unlock Animations
 
-## Add your files
+Choose from 4 different unlock mechanisms for your card recipient:
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+- **Bring Together**: Drag two avatars together to unlock
+- **Break Heart**: Drag a key to the heart lock
+- **Scratch Card**: Scratch to reveal the card
+- **Find The Real Heart**: Find the correct heart among decoys
+
+### Sharing
+
+- Unique shareable links for each card
+- Edit token for card creators to modify their cards
+- Mobile-responsive viewer experience
+
+## 🛠 Tech Stack
+
+### Frontend (Web App)
+
+- **React 18** with TypeScript
+- **Vite** for fast development and building
+- **Tailwind CSS** for styling
+- **React Router** for navigation
+- **Gesture handling** with pointer events for smooth mobile interactions
+
+### Backend (API)
+
+- **Node.js** with TypeScript
+- **Express** framework
+- **Prisma ORM** for database management
+- **PostgreSQL** database
+
+### DevOps
+
+- **Docker** & **Docker Compose** for containerization
+- **pnpm** for package management
+
+## 📁 Project Structure
 
 ```
-cd existing_repo
-git remote add origin https://git.mfess.co.th:8087/ai-demo-project/valentine-card.git
-git branch -M main
-git push -uf origin main
+valentine-card/
+├── apps/
+│   ├── api/              # Backend API server
+│   │   ├── src/
+│   │   │   └── index.ts
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma
+│   │   │   └── migrations/
+│   │   └── package.json
+│   │
+│   └── web/              # Frontend React application
+│       ├── src/
+│       │   ├── pages/
+│       │   │   ├── create/        # Card creation page
+│       │   │   ├── reveal/        # Unlock animations
+│       │   │   ├── CardPage.tsx   # Card viewer
+│       │   │   ├── ExportPage.tsx # Share/export
+│       │   │   └── Home.tsx       # Landing page
+│       │   ├── App.tsx
+│       │   └── main.tsx
+│       ├── public/
+│       │   ├── avatars/
+│       │   ├── background/
+│       │   ├── stickers/
+│       │   └── templates/
+│       └── package.json
+│
+├── docker-compose.yml
+└── package.json
 ```
 
-## Integrate with your tools
+## 🚀 Getting Started
 
-- [ ] [Set up project integrations](https://git.mfess.co.th:8087/ai-demo-project/valentine-card/-/settings/integrations)
+### Prerequisites
 
-## Collaborate with your team
+- **Node.js** 18+
+- **pnpm** (recommended) or npm
+- **Docker** & **Docker Compose** (for database)
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+### Installation
 
-## Test and Deploy
+1. **Clone the repository**
 
-Use the built-in continuous integration in GitLab.
+   ```bash
+   git clone https://github.com/Kaungkhantk3/Valentine_Card.git
+   cd valentine-card
+   ```
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+2. **Install dependencies**
 
-***
+   ```bash
+   pnpm install
+   ```
 
-# Editing this README
+3. **Start the database**
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+   ```bash
+   docker-compose up -d
+   ```
 
-## Suggestions for a good README
+4. **Run database migrations**
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+   ```bash
+   cd apps/api
+   pnpm prisma migrate deploy
+   ```
 
-## Name
-Choose a self-explaining name for your project.
+5. **Start the development servers**
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+   In separate terminals:
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+   **Backend:**
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+   ```bash
+   cd apps/api
+   pnpm dev
+   ```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+   **Frontend:**
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+   ```bash
+   cd apps/web
+   pnpm dev
+   ```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+6. **Open your browser**
+   - Frontend: `http://localhost:5173`
+   - API: `http://localhost:3000`
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## 💻 Development
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### Frontend Development
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+The web app runs on Vite with hot module replacement for fast development.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```bash
+cd apps/web
+pnpm dev
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### Backend Development
 
-## License
-For open source projects, say how it is licensed.
+The API server uses nodemon for auto-restart on file changes.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+```bash
+cd apps/api
+pnpm dev
+```
+
+### Database Management
+
+**Generate Prisma Client:**
+
+```bash
+cd apps/api
+pnpm prisma generate
+```
+
+**Create a new migration:**
+
+```bash
+cd apps/api
+pnpm prisma migrate dev --name your_migration_name
+```
+
+**Open Prisma Studio (Database GUI):**
+
+```bash
+cd apps/api
+pnpm prisma studio
+```
+
+## 📦 Building for Production
+
+### Build Frontend
+
+```bash
+cd apps/web
+pnpm build
+```
+
+### Build Backend
+
+```bash
+cd apps/api
+pnpm build
+```
+
+## 🎨 Customization
+
+### Adding New Templates
+
+1. Add template images to `apps/web/public/templates/`
+2. Update template definitions in `apps/web/src/pages/create/templates.ts`
+
+### Adding New Stickers
+
+1. Add sticker images to `apps/web/public/stickers/`
+2. Update sticker definitions in `apps/web/src/pages/create/stickers.ts`
+
+### Adding New Shapes
+
+Update shape definitions in `apps/web/src/pages/create/shapes.ts`
+
+## 📱 Mobile Support
+
+The application is fully responsive and optimized for mobile devices with:
+
+- Touch-friendly gesture controls
+- Responsive layouts
+- Mobile-optimized unlock animations
+- Smooth scrolling and interactions
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+## 👨‍💻 Author
+
+**Kaung Khant Kyaw** - [@Kaungkhantk3](https://github.com/Kaungkhantk3)
+
+## 🙏 Acknowledgments
+
+- Icons from [Lucide React](https://lucide.dev/)
+- UI components built with [Tailwind CSS](https://tailwindcss.com/)
+- Database management with [Prisma](https://www.prisma.io/)
+
+---
+
+Made with ❤️ for Valentine's Day
+
+> > > > > > > 63597f2 (Added README file)
