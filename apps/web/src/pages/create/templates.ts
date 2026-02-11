@@ -107,13 +107,13 @@ export const templates: Record<string, Template> = {
     id: "t7",
     name: "Plain Background",
     backgroundSrc: "/templates/t7.png",
-    frames: [], // No frames = free image placement
+    frames: [], // No frames
   },
 
   t8: {
     id: "t8",
     name: "Calendar Style",
     backgroundSrc: "/templates/t8.png",
-    frames: [], // No frames = free image placement
+    frames: [], // No frames
   },
 };

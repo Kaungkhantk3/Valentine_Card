@@ -367,7 +367,7 @@ export default function ExportPage({
 
             {(tpl.frames ?? []).map((fr, i) => {
               const p = getPhotoForFrame(i);
-              if (!p || fr.kind !== "path") return null;
+              if (!p || fr.kind !== "path" || !p.url) return null;
 
               const fit: FitMode = (p.fit ?? "cover") as FitMode;
 
