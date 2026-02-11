@@ -103,14 +103,32 @@ const upload = multer({
 const minio = new MinioClient({
   endPoint: process.env.MINIO_ENDPOINT || "localhost",
   port: Number(process.env.MINIO_PORT || 9000),
-  useSSL: false,
-  accessKey: process.env.MINIO_ACCESS_KEY || "minio",
-  secretKey: process.env.MINIO_SECRET_KEY || "minio12345",
+  useSSL: process.env.MINIO_USE_SSL === "true",
+  accessKey: process.env.MINIO_ACCESS_KEY!,
+  secretKey: process.env.MINIO_SECRET_KEY!,
 });
 
-const BUCKET = process.env.MINIO_BUCKET || "vday";
-const PUBLIC_BASE =
-  process.env.MINIO_PUBLIC_BASE_URL || "http://localhost:9000";
+const BUCKET = process.env.MINIO_BUCKET!;
+const PUBLIC_BASE = process.env.MINIO_PUBLIC_BASE_URL!;
+
+// Validate required environment variables
+const requiredEnvVars = [
+  "DATABASE_URL",
+  "MINIO_ACCESS_KEY",
+  "MINIO_SECRET_KEY",
+  "MINIO_BUCKET",
+  "MINIO_PUBLIC_BASE_URL",
+];
+
+const missingEnvVars = requiredEnvVars.filter(
+  (varName) => !process.env[varName],
+);
+if (missingEnvVars.length > 0) {
+  console.error("❌ Missing required environment variables:");
+  missingEnvVars.forEach((varName) => console.error(`   - ${varName}`));
+  console.error("\nPlease create a .env file based on .env.example");
+  process.exit(1);
+}
 
 // ============================================
 // UPLOAD ENDPOINTS - With Rate Limiting & Validation

@@ -45,12 +45,12 @@ Choose from 4 different unlock mechanisms for your card recipient:
 - **Node.js** with TypeScript
 - **Express** framework
 - **Prisma ORM** for database management
-- **PostgreSQL** database
+- **MYSQL** database
 
 ### DevOps
 
 - **Docker** & **Docker Compose** for containerization
-- **pnpm** for package management
+- **npm** for package management
 
 ## 📁 Project Structure
 
@@ -91,7 +91,7 @@ valentine-card/
 ### Prerequisites
 
 - **Node.js** 18+
-- **pnpm** (recommended) or npm
+- **npm**
 - **Docker** & **Docker Compose** (for database)
 
 ### Installation
@@ -106,7 +106,7 @@ valentine-card/
 2. **Install dependencies**
 
    ```bash
-   pnpm install
+   npm install
    ```
 
 3. **Start the database**
@@ -119,7 +119,7 @@ valentine-card/
 
    ```bash
    cd apps/api
-   pnpm prisma migrate deploy
+   npm prisma migrate deploy
    ```
 
 5. **Start the development servers**
@@ -130,19 +130,19 @@ valentine-card/
 
    ```bash
    cd apps/api
-   pnpm dev
+   npm dev
    ```
 
    **Frontend:**
 
    ```bash
    cd apps/web
-   pnpm dev
+   npm dev
    ```
 
 6. **Open your browser**
    - Frontend: `http://localhost:5173`
-   - API: `http://localhost:3000`
+   - API: `http://localhost:4000`
 
 ## 💻 Development
 
@@ -152,7 +152,7 @@ The web app runs on Vite with hot module replacement for fast development.
 
 ```bash
 cd apps/web
-pnpm dev
+npm run dev
 ```
 
 ### Backend Development
@@ -161,7 +161,7 @@ The API server uses nodemon for auto-restart on file changes.
 
 ```bash
 cd apps/api
-pnpm dev
+npm run dev
 ```
 
 ### Database Management
@@ -170,21 +170,21 @@ pnpm dev
 
 ```bash
 cd apps/api
-pnpm prisma generate
+npm prisma generate
 ```
 
 **Create a new migration:**
 
 ```bash
 cd apps/api
-pnpm prisma migrate dev --name your_migration_name
+npm prisma migrate dev --name your_migration_name
 ```
 
 **Open Prisma Studio (Database GUI):**
 
 ```bash
 cd apps/api
-pnpm prisma studio
+npm prisma studio
 ```
 
 ## 📦 Building for Production
@@ -193,14 +193,14 @@ pnpm prisma studio
 
 ```bash
 cd apps/web
-pnpm build
+npm build
 ```
 
 ### Build Backend
 
 ```bash
 cd apps/api
-pnpm build
+npm build
 ```
 
 ## 🎨 Customization
