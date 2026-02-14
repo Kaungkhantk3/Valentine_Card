@@ -249,5 +249,3 @@ This project is open source and available under the [MIT License](LICENSE).
 ---
 
 Made with ❤️ for Valentine's Day
-
-> > > > > > > 63597f2 (Added README file)
